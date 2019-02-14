@@ -1,2 +1,3 @@
-# nasic-interpreter
-A nasic interpreter written in opcodes
+# Nasic-to-EVM
+
+Evaluates a Nasic graph inside the Ethereum Virtual Machine.
