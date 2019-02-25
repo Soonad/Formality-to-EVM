@@ -112,28 +112,37 @@ var node = [
     ADD,
     ADD
     // Stack contains: node_pos -> x
-]
+].join("");
 
 // port(node, slot) -- Calculate the memoy position of a port
 // gas cost = 23
 var port = [
     // Stack contains node -> slot -> x
     // port's position in memory = (node * 4) + slot + BUFFER_SIZE_POS + 1
-    PUSH1, "4",
+    PUSH1, "04",
     MUL,
     PUSH1, BUFFER_SIZE_POS,
-    PUSH1, "1",
+    PUSH1, "01",
     ADD,
     ADD,
     ADD
 ].join("");
 
 // addr (port) -- Returns the node to which a port belongs
-// gas cost = 8
+// gas cost = 20 + 6*
 var addr = [
     // Stack contains port -> x
-    PUSH1, "4",
+    PUSH1, "00",
+    MSTORE,
+
+    PUSH1, "04",
+    PUSH1, BUFFER_SIZE_POS,
+    PUSH1, "00",
+    MLOAD,
+    // Stack contains:  port -> buffSize -> 04 -> x
+    SUB,
     DIV
+    // Stack contains: addr -> x
 ].join("");
 
 // slot(port) -- Returns the slot of a port
@@ -181,10 +190,6 @@ var link = [
     MSTORE, // mem[PortB] = PortA
     MSTORE  // mem[PortA] = PortB
     // Now stack is: x
-].join("");
-
-var reduce = [
-    // TODO
 ].join("");
 
 // rewrite(nodeX, nodeY) -- Rewrites an active pair
@@ -282,8 +287,8 @@ var rewrite = [
     POP,
     // Stack contains: x
     // Jump to ent of function
-    PUSH1, "yyyyy"
-    JUMP
+    PUSH1, "yyyyy",
+    JUMP,
 
     //=======================================
     /*if kind(x) == kind(y) -- gas cost = ??? */
@@ -332,6 +337,10 @@ var code = [
     PUSH1, BUFFER_SIZE_POS,
     CALLDATACOPY,
 
+    PUSH1, "56",
+
+    addr,
+
     // Stop
     STOP
 ].join("");
@@ -352,8 +361,10 @@ vm.on("step", function ({pc, gasLeft, opcode, stack, depth, address, account, st
 vm.runCode({
   code: Buffer.from(code, "hex"),
   gasLimit: Buffer.from("ffffffff", "hex"),
-  data: Buffer.from("000000000000000000000000000000000000000000000000000000000000002806020104081C000104180C010A1510010E1916011A0D120109111401052220011E241D01211C2500", "hex")
+  //data: Buffer.from("000000000000000000000000000000000000000000000000000000000000002806020104081C000104180C010A1510010E1916011A0D120109111401052220011E241D01211C2500", "hex")
+  data: Buffer.from("00000000000000000000000000000000000000000000000000000000000000020405060500010203", "hex")
 }, function (err, results) {
+  console.log("code: " + code);
   console.log("returned: " + results.return.toString("hex"));
   console.log("gasUsed: " + results.gasUsed.toString());
   console.log(err);
