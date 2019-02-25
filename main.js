@@ -14,6 +14,7 @@ const ADD           =   "01";
 const MUL           =   "02";
 const SUB           =   "03";
 const DIV           =   "04";
+const EQ            =   "14";
 const AND           =   "16";
 const OR            =   "17";
 const XOR           =   "18";
@@ -24,6 +25,7 @@ const MLOAD         =   "51";
 const MSTORE        =   "52";
 const MSTORE8       =   "53";
 const JUMP          =   "56";
+const JUMPI         =   "57";
 const JUMPDEST      =   "5b";
 const PUSH1         =   "60";
 const PUSH2         =   "61";
@@ -104,7 +106,7 @@ var node = [
     // Stack contains: node_id -> x
     // NODE_POSITION = (node_id * 4) + BUFFER_SIZE_POS + 1
     PUSH1, "04",
-    MUL
+    MUL,
     PUSH1, BUFFER_SIZE_POS,
     PUSH1, "01",
     ADD,
@@ -186,118 +188,144 @@ var reduce = [
 ].join("");
 
 // rewrite(nodeX, nodeY) -- Rewrites an active pair
-// gas cost; kind(x) == kind(y) ? (true = 125 + 24*) : (false = 683 + 108*)
+// gas cost: kind(x) == kind(y) ? (true = 125 + 24*) : (false = 683 + 108*)
 var rewrite = [
     // Stack contains nodeX -> nodeY -> x
-    /*if kind(net, x) == kind(net, y) -- gas cost = ??? */
-    PUSH1, "01",
     DUP2,
-    /*port*/,
-    /*enter*/,
-    PUSH1, "01",
-    DUP4,
-    /*port*/,
-    /*enter*/,
-    /*link*/,
-
-    PUSH1, "02",
-    /*port*/,
-    /*enter*/,
-    PUSH1, "02",
-    DUP3,
-    /*port*/,
-    /*enter*/,
-    /*link*/,
-
-    // Stack contains: x
-
+    kind,
+    DUP2,
+    kind,
+    EQ,
+    PUSH1, "xxxxx",
+    JUMPI
     /* else */,
     // Stack contains: nodeX -> nodeY -> x
     DUP1,
-    /*kind*/,
-    /*new_node*/,
+    kind,
+    new_node,
     PUSH1, BUFFER_SIZE_POS,
     MLOAD,
     // Stack contains: newNodeA -> nodeX -> nodeY -> x
     DUP3,
-    /*kind*/,
-    /*new_node*/,
+    kind,
+    new_node,
     PUSH1, BUFFER_SIZE_POS,
     MLOAD,
 
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "01",
     DUP3,
-    /*port*/,
-    /*enter*/,
-    PUSH1, "00"
+    port,
+    enter,
+    PUSH1, "00",
     DUP2,
-    /*port*/,
-    /*link*/, // link(enter(port(x,1)), port(b, 0))
+    port,
+    link, // link(enter(port(x,1)), port(b, 0))
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "00",
     DUP5,
-    /*port*/,
+    port,
     PUSH1, "02",
     DUP5,
-    /*port*/,
-    /*enter*/,
-    /*link*/, // link(port(y,0), enter(port(x, 2)))
+    port,
+    enter,
+    link, // link(port(y,0), enter(port(x, 2)))
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "01",
     DUP5,
-    /*port*/,
-    /*enter*/,
-    PUSH, "00",
+    port,
+    enter,
+    PUSH1, "00",
     DUP4,
-    /*port*/,
-    /*link*/, //link(enter(port(y,1)), port(a, 0))
+    port,
+    link, //link(enter(port(y,1)), port(a, 0))
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "02",
     DUP5,
-    /*port*/,
-    /*enter*/,
-    PUSH, "00",
+    port,
+    enter,
+    PUSH1, "00",
     DUP5,
-    /*port*/,
-    /*link*/, //link(enter(port(y,2)), port(x, 0))
+    port,
+    link, //link(enter(port(y,2)), port(x, 0))
 
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
-    PUSH, "01"
+    PUSH1, "01",
     DUP3,
-    /*port*/,
-    PUSH, "01"
+    port,
+    PUSH1, "01",
     DUP3,
-    /*port*/,
-    /*link*/, //link(net, port(a, 1), port(b, 1));
+    port,
+    link, //link(net, port(a, 1), port(b, 1));
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
-    PUSH, "02",
-    /*port*/,
-    PUSH, "01",
+    PUSH1, "02",
+    port,
+    PUSH1, "01",
     DUP3,
-    /*port*/,
-    /*link*/, //link(net, port(x, 1), port(b, 2));
+    port,
+    link, //link(net, port(x, 1), port(b, 2));
     // Stack contains: newNodeA -> nodeX -> nodeY -> x
-    PUSH, "02",
-    /*port*/,
-    PUSH, "01",
+    PUSH1, "02",
+    port,
+    PUSH1, "01",
     DUP4,
-    /*port*/,
-    /*link*/, //link(net, port(a, 2), port(y, 1));
+    port,
+    link, //link(net, port(a, 2), port(y, 1));
     // Stack contains: nodeX -> nodeY -> x
-    PUSH, "02"
-    /*port*/,
-    PUSH, "02"
+    PUSH1, "02",
+    port,
+    PUSH1, "02",
     DUP3,
-    /*port*/,
-    /*link*/, //link(net, port(x, 2), port(y, 2));
+    port,
+    link, //link(net, port(x, 2), port(y, 2));
     // Stack contains: nodeY -> x
     POP,
     // Stack contains: x
+    // Jump to ent of function
+    PUSH1, "yyyyy"
+    JUMP
+
+    //=======================================
+    /*if kind(x) == kind(y) -- gas cost = ??? */
+    PUSH1, "01", // <----- Position "xxxxx"
+    DUP2,
+    port,
+    enter,
+    PUSH1, "01",
+    DUP4,
+    port,
+    enter,
+    link,
+
+    PUSH1, "02",
+    port,
+    enter,
+    PUSH1, "02",
+    DUP3,
+    port,
+    enter,
+    link,
+    // Stack contains: x
+    JUMPDEST // <------ Position "yyyyy"
 
 ].join("");
 
-var load = [
+// reduce() -- Reduces a net to normal form lazily and sequentially.
+var reduce = [
+    JUMPDEST,
+    /*
+    let mut warp : Vec<u32> = Vec::new();
+    let mut exit : Vec<u32> = Vec::new();
+    let mut next : Port = net.nodes[0];
+    let mut prev : Port;
+    let mut back : Port;
+    */
+
+    /* while next > 0 || warp.len() > 0 */
+
+].join("");
+
+var code = [
     // Load SIC graph to memory
     PUSH2, "ffff",
     PUSH1, "00",
