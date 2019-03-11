@@ -38,17 +38,14 @@ const DUP4          =   "83";
 const DUP5          =   "84";
 
 // Important memory positions
-const BUFFER_SIZE_POS = "1f";
-const NODE_SIZE = "20"; // node size = 32 bytes (in hex)
-const FIRST_NODE_POS = (parseInt(BUFFER_SIZE_POS, 16) + parseInt(NODE_SIZE, 16)).toString(16);
+const BUFFER_SIZE_POS = "4f"
+
 
 var Buffer = require("safe-buffer").Buffer; // use for Node.js <4.5.0
 var VM = require("ethereumjs-vm");
 
 // create a new VM instance
 var vm = new VM();
-
-////////////////////// FUNCTIONS //////////////////////
 
 // NOT WORKING
 // new_node(kind) -- Allocates a new node
@@ -58,7 +55,7 @@ var new_node = [
     // get buffer last writable position
     PUSH1, BUFFER_SIZE_POS,
     MLOAD,
-    PUSH1, "01",
+    PUSH1, BUFFER_SIZE_POS,
     ADD,
     // Now last value in stack is the last used position in the buffer
 
@@ -105,60 +102,47 @@ var new_node = [
 ].join("");
 
 // node(node_id) -- Returns the memory position of a node
-// gas cost = 14
+// gas cost = 20
 var node = [
     // Stack contains: node_id -> x
-    // NODE_POSITION = node_id * NODE_SIZE + FIRST_NODE_POS
-    PUSH1, NODE_SIZE,
+    // NODE_POSITION = (node_id * 4) + BUFFER_SIZE_POS + 1
+    PUSH1, "04",
     MUL,
-    PUSH1, FIRST_NODE_POS,
+    PUSH1, BUFFER_SIZE_POS,
+    PUSH1, "01",
     ADD,
+    ADD
     // Stack contains: node_pos -> x
 ].join("");
 
-// port(node, slot) -- Calculate the memory position of a port
-// A port can be understood as a (node, slot) tuple. A port is calculated by
-// abstracting how the network is stored in memory from a format:
-// RMem: [NODE0, NODE1, NODE2, ...] where each node has 256 bits and
-// VMem: [[SLOT0_0, SLOT1_0, SLOT2_0, KIND0], [SLOT0_1, SLOT1_1, SLOT2_1, KIND1], ...]
-// where each slot has 64 bits.
-// The 'port' can be understood as a position in this "Virtual Memory" (VMem), which
-// is an abstraction of the "Real Memory" (RMem).
-//
-// ATTENTION: You should NEVER try to MSTORE anything directly in a 'port'. This is
-// only an abstraction to make reasoning easier, not an address to be used!
-//
-// gas cost = 17
+// port(node, slot) -- Calculate the memoy position of a port
+// gas cost = 23
 var port = [
-    // Stack contains node_id -> slot -> x
-    // port's position in abstract memory = BUFFER_SIZE_POS + (node_id * NODE_SIZE) + (slot+1 * 8)
-    PUSH1, "00",
-    MSTORE, // Store node_id in memory
-    // stack contains slot -> x
+    // Stack contains node -> slot -> x
+    // port's position in memory = (node * 4) + slot + BUFFER_SIZE_POS + 1
+    PUSH1, "04",
+    MUL,
+    PUSH1, BUFFER_SIZE_POS,
     PUSH1, "01",
     ADD,
-    PUSH1, "08",
-    MUL,
-    // stack contains ((slot + 1) * 8) -> x
-    PUSH1, "00",
-    MLOAD, // load node_id from memory into stack
-    PUSH1, NODE_SIZE,
-    MUL,
-    // stack contains (node_id * NODE_SIZE) -> (slot * 8) -> x
-    PUSH1, BUFFER_SIZE_POS,
     ADD,
-    ADD,
-    // stack contains port -> x
+    ADD
 ].join("");
 
 // addr (port) -- Returns the node to which a port belongs
 // gas cost = 20 + 6*
 var addr = [
     // Stack contains port -> x
+    PUSH1, "00",
+    MSTORE,
+
+    PUSH1, "04",
     PUSH1, BUFFER_SIZE_POS,
+    PUSH1, "00",
+    MLOAD,
+    // Stack contains:  port -> buffSize -> 04 -> x
     SUB,
-    PUSH1, NODE_SIZE,
-    DIV,
+    DIV
     // Stack contains: addr -> x
 ].join("");
 
@@ -166,10 +150,8 @@ var addr = [
 // gas cost = 6
 var slot = [
     // Stack contains port -> x
-    PUSH1, "08",
-    DIV,
     PUSH1, "03",
-    AND,
+    AND
 ].join("");
 
 // NOT WORKING
@@ -182,28 +164,30 @@ var enter = [
 ].join("");
 
 // NOT WORKING
-// kind(node) -- Returns the kind of the node
+// kind(node) -- Returns the type of the node
 // 0 = era (i.e., a set or a garbage collector)
 // 1 = con (i.e., a lambda or an application)
 // 2 = fan (i.e., a pair or a let)
-// gas cost = 18 + 3*
+// gas cost = 20 + 3*
 var kind = [
-    // Stack contains node_id -> x
-    node,
-    MLOAD,
-    PUSH32, "000000000000000000000000000000000000000000000000ffffffffffffffff",
-    AND,
-    // Stack contains kind -> x
+    // Stack contains node -> x
+    // -- Get node kind position in memory where:
+    //    NODE_POSITION = (node * 4) + BUFFER_SIZE_POS + 1
+    //    NODE_KIND = NODE_POSITION + 3
+    PUSH1, "4",
+    MUL,
+    PUSH1, BUFFER_SIZE_POS,
+    PUSH1, "4",
+    ADD,
+    ADD,
+    MLOAD //TODO: This gets a whole 256 bits word from memory, not just the
+          //      value for node kind. Find a solution to this problem.
 ].join("");
 
 // NOT WORKING
-// link(nodeA, nodeB, slotA, slotB) -- Links two ports
+// link(portA, portB) -- Links two ports
 // gas cost = 6 + 6*
 var link = [
-
-
-
-
     //TODO: Each MLOAD in tthis function stores a whole 256 bits word from memory, not just the
     //      value for node port. Find a solution to this problem.
     // Stack contains: portA -> portB -> x
@@ -215,7 +199,6 @@ var link = [
     // Now stack is: x
 ].join("");
 
-// NOT WORKING
 // rewrite(nodeX, nodeY) -- Rewrites an active pair
 // gas cost: kind(x) == kind(y) ? (true = 125 + 24*) : (false = 683 + 108*)
 var rewrite = [
@@ -339,7 +322,6 @@ var rewrite = [
 
 ].join("");
 
-// NOT WORKING
 // reduce() -- Reduces a net to normal form lazily and sequentially.
 var reduce = [
     // TODO
@@ -356,54 +338,6 @@ var reduce = [
 
 ].join("");
 
-////////////////////// TESTS //////////////////////
-var nodeTest = [
-    //should push position of node 0 to stack
-    PUSH1, "00",
-    node,
-    //should push position of node 1 to stack
-    PUSH1, "01",
-    node,
-].join("");
-
-var portTest = [
-    PUSH1, "00", // slot 0
-    PUSH1, "00", // node 0
-    port,
-    PUSH1, "03", // slot 3 (kind)
-    PUSH1, "00", // node 0
-    port,
-    PUSH1, "02", // slot 2
-    PUSH1, "01", // node 1
-    port,
-].join("");
-
-var addrTest = [
-    PUSH1, "27",
-    addr,
-    PUSH1, "3f",
-    addr,
-    PUSH1, "57",
-    addr,
-].join("");
-
-var slotTest = [
-    PUSH1, "27",
-    slot,
-    PUSH1, "3f",
-    slot,
-    PUSH1, "47",
-    slot,
-].join("");
-
-// NOT PASSING
-var kindTest = [
-    PUSH1, "00",
-    kind,
-    //PUSH1, "01",
-    //kind,
-].join("");
-////////////////////// EVM CODE //////////////////////
 var code = [
     // Load SIC graph to memory
     PUSH2, "ffff",
@@ -411,11 +345,10 @@ var code = [
     PUSH1, BUFFER_SIZE_POS,
     CALLDATACOPY,
 
-    PUSH1, "27",
-    PUSH1, "1f",
-    SUB,
-    PUSH1, "20",
-    DIV,
+    PUSH1, "00",
+
+    kind,
+
     // Stop
     STOP
 ].join("");
@@ -430,7 +363,7 @@ vm.on("step", function ({pc, gasLeft, opcode, stack, depth, address, account, st
       console.log("- " + i + ": " + hex(stack[i].toString("hex")));
     }
     console.log("PC: " + pc + " | GAS: " + gasLeft + " | OPCODE: " + opcode.name + " (" + opcode.fee + ")");
-    console.log("MEM:", memory.slice(63, 87));
+    console.log("MEM:", memory.slice(110, 130));
 });
 
 vm.runCode({
@@ -439,7 +372,7 @@ vm.runCode({
   //data: Buffer.from("000000000000000000000000000000000000000000000000000000000000002806020104081C000104180C010A1510010E1916011A0D120109111401052220011E241D01211C2500", "hex")
   data: Buffer.from(["0000000000000000000000000000000000000000000000000000000000000002", // size
                      "0000000000000004 0000000000000005 0000000000000006 0000000000000001", // node 1
-                     "0000000000000000 0000000000000001 0000000000000002 0000000000000003", // node 2
+                     "0000000000000000 0000000000000001 0000000000000002 0000000000000002", // node 2
                  ].join('').split(' ').join(''), "hex")
 }, function (err, results) {
   console.log("code: " + code);
