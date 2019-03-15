@@ -8,7 +8,7 @@
  * using node-static or `python -mSimpleHTTPServer`).
  */
 
-// opcodes
+/////////// Opcodes ///////////
 const STOP          =   "00";
 const ADD           =   "01";
 const MUL           =   "02";
@@ -30,25 +30,35 @@ const JUMPDEST      =   "5b";
 const PUSH1         =   "60";
 const PUSH2         =   "61";
 const PUSH4         =   "63";
+const PUSH8         =   "67";
 const PUSH32        =   "7f";
 const DUP1          =   "80";
 const DUP2          =   "81";
 const DUP3          =   "82";
 const DUP4          =   "83";
 const DUP5          =   "84";
+const SWAP1         =   "90";
 
-// Important memory positions
-const BUFFER_SIZE_POS = "1f";
-const NODE_SIZE = "20"; // node size = 32 bytes (in hex)
+/////////// Important constants ///////////
+const BUFFER_SIZE_POS = "1f"; // This value shouls be never smaller than '1f' once
+                              // the code needs at least 32 byte reserved memory to run
+
+const SLOT_SIZE = "08"; // Hex size, in bytes, of a slot.
+const NODE_SIZE = (parseInt(SLOT_SIZE, 16) * 4).toString(16); //Each node has 4 slots
+
+//--Position of the first node in memory. Precalculated for optimization purposes
 const FIRST_NODE_POS = (parseInt(BUFFER_SIZE_POS, 16) + parseInt(NODE_SIZE, 16)).toString(16);
 
+
+/////////// Impotant variables ///////////
 var Buffer = require("safe-buffer").Buffer; // use for Node.js <4.5.0
 var VM = require("ethereumjs-vm");
 
 // create a new VM instance
 var vm = new VM();
 
-////////////////////// FUNCTIONS //////////////////////
+
+/////////// Functions ///////////
 
 // NOT WORKING
 // new_node(kind) -- Allocates a new node
@@ -152,23 +162,26 @@ var port = [
 ].join("");
 
 // addr (port) -- Returns the node to which a port belongs
-// gas cost = 20 + 6*
+// gas cost = 26 + 6*
 var addr = [
     // Stack contains port -> x
     PUSH1, BUFFER_SIZE_POS,
+    SWAP1,
     SUB,
     PUSH1, NODE_SIZE,
+    SWAP1,
     DIV,
     // Stack contains: addr -> x
 ].join("");
 
 // slot(port) -- Returns the slot of a port
-// gas cost = 6
+// gas cost = 9
 var slot = [
     // Stack contains port -> x
-    PUSH1, "08",
+    PUSH1, SLOT_SIZE,
+    SWAP1,
     DIV,
-    PUSH1, "03",
+    PUSH1, "03", // we just want the last 2 bits
     AND,
 ].join("");
 
@@ -177,8 +190,9 @@ var slot = [
 // gas cost = 3*
 var enter = [
     // Stack contains port -> x
-    MLOAD //TODO: This gets a whole 256 bits word from memory, not just the
-          //      value in node port. Find a solution to this problem.
+    MLOAD,
+    PUSH8, "ffffffffffffffff",
+    AND, // We only want the last 8 bytes
 ].join("");
 
 // NOT WORKING
@@ -200,10 +214,6 @@ var kind = [
 // link(nodeA, nodeB, slotA, slotB) -- Links two ports
 // gas cost = 6 + 6*
 var link = [
-
-
-
-
     //TODO: Each MLOAD in tthis function stores a whole 256 bits word from memory, not just the
     //      value for node port. Find a solution to this problem.
     // Stack contains: portA -> portB -> x
@@ -357,6 +367,7 @@ var reduce = [
 ].join("");
 
 ////////////////////// TESTS //////////////////////
+// PASSING
 var nodeTest = [
     //should push position of node 0 to stack
     PUSH1, "00",
@@ -366,6 +377,7 @@ var nodeTest = [
     node,
 ].join("");
 
+//PASSING
 var portTest = [
     PUSH1, "00", // slot 0
     PUSH1, "00", // node 0
@@ -378,31 +390,60 @@ var portTest = [
     port,
 ].join("");
 
+//PASSING
 var addrTest = [
-    PUSH1, "27",
+    PUSH1, "27", // Node 0
     addr,
-    PUSH1, "3f",
+    PUSH1, "37", // Node 0
     addr,
-    PUSH1, "57",
+    PUSH1, "3f", // Node 1
     addr,
 ].join("");
 
+//PASSING
 var slotTest = [
-    PUSH1, "27",
+    PUSH1, "27", // Slot 0
     slot,
-    PUSH1, "3f",
+    PUSH1, "3f", // Slot 0
     slot,
-    PUSH1, "47",
+    PUSH1, "37", // Slot 2
     slot,
 ].join("");
 
-// NOT PASSING
+//PASSING
+var enterTest = [
+    PUSH1, "00", // node 0
+    PUSH1, "00", // slot 0
+    port, // port 27
+    DUP1,
+    enter,
+    SWAP1,
+    MLOAD,
+].join("");
+
+// PASSING
+var accordanceTest = [
+    PUSH1, "00", // node 0
+    PUSH1, "00", // slot 0
+    port, // port 27
+    PUSH1, "27",
+    slot, // slot 0
+    PUSH1, "27",
+    addr, // node 0
+    PUSH1, "27",
+    enter, // value on port 27
+    PUSH1, "27",
+    MLOAD, // port 27 memory vicinity
+].join("");
+
+// PASSING
 var kindTest = [
     PUSH1, "00",
     kind,
-    //PUSH1, "01",
-    //kind,
+    PUSH1, "01",
+    kind,
 ].join("");
+
 ////////////////////// EVM CODE //////////////////////
 var code = [
     // Load SIC graph to memory
@@ -411,39 +452,41 @@ var code = [
     PUSH1, BUFFER_SIZE_POS,
     CALLDATACOPY,
 
-    PUSH1, "27",
-    PUSH1, "1f",
-    SUB,
-    PUSH1, "20",
-    DIV,
+    // Code
+    kindTest,
+
     // Stop
     STOP
 ].join("");
-
+console.log(code);
+/*
 const until = (stop, fn, val) => !stop(val) ? until(stop, fn, fn(val)) : val;
 const lpad = (len, chr, str) => until((s) => s.length === len, (s) => chr + s, str);
 const hex = (str) => "0x" + lpad(32, "0", str);
 const repeat = (str, n) => n === 0 ? "" : str + repeat(str, n - 1);
-
-vm.on("step", function ({pc, gasLeft, opcode, stack, depth, address, account, stateManager, memory, memoryWordCount}) {
+*/
+/*vm.on("step", function ({pc, gasLeft, opcode, stack, depth, address, account, stateManager, memory, memoryWordCount}) {
     for (var i = 0; i < stack.length; ++i) {
       console.log("- " + i + ": " + hex(stack[i].toString("hex")));
     }
     console.log("PC: " + pc + " | GAS: " + gasLeft + " | OPCODE: " + opcode.name + " (" + opcode.fee + ")");
-    console.log("MEM:", memory.slice(63, 87));
-});
+    console.log("MEM:", memory.slice(31, 51));
+});*/
 
+/*
 vm.runCode({
   code: Buffer.from(code, "hex"),
-  gasLimit: Buffer.from("ffffffff", "hex"),
+  gasLimit: Buffer.from("ffffffffffff", "hex"),
   //data: Buffer.from("000000000000000000000000000000000000000000000000000000000000002806020104081C000104180C010A1510010E1916011A0D120109111401052220011E241D01211C2500", "hex")
-  data: Buffer.from(["0000000000000000000000000000000000000000000000000000000000000002", // size
+  /*data: Buffer.from(["0000000000000000000000000000000000000000000000000000000000000002", // size
                      "0000000000000004 0000000000000005 0000000000000006 0000000000000001", // node 1
                      "0000000000000000 0000000000000001 0000000000000002 0000000000000003", // node 2
-                 ].join('').split(' ').join(''), "hex")
+                 ].join('').split(' ').join(''), "hex") *-/
+ data: Buffer.from("000000000000000000000000000000000000000000000000000000000000000200000000000000040000000000000005000000000000000600000000000000010000000000000000000000000000000100000000000000020000000000000003", "hex")
 }, function (err, results) {
   console.log("code: " + code);
   console.log("returned: " + results.return.toString("hex"));
   console.log("gasUsed: " + results.gasUsed.toString());
   console.log(err);
 })
+*/
