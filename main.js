@@ -31,6 +31,7 @@ const PUSH1         =   "60";
 const PUSH2         =   "61";
 const PUSH4         =   "63";
 const PUSH8         =   "67";
+const PUSH9         =   "68";
 const PUSH32        =   "7f";
 const DUP1          =   "80";
 const DUP2          =   "81";
@@ -61,61 +62,6 @@ var vm = new VM();
 
 
 /////////// Functions ///////////
-
-// NOT WORKING
-// new_node(kind) -- Allocates a new node
-// gas cost = 63 + 18*
-var new_node = [
-    // Stack contains kind -> x
-    // get buffer last writable position
-    PUSH1, BUFFER_SIZE_POS,
-    MLOAD,
-    PUSH1, "01",
-    ADD,
-    // Now last value in stack is the last used position in the buffer
-
-    // Update buffer size
-    DUP1, // Duplicate position on stack because we need to
-          // use this value later
-
-    PUSH1, "04",
-    ADD,
-    PUSH1, BUFFER_SIZE_POS,
-    MSTORE,
-    // Again, last value in stack is the last used position in the buffer
-
-    // White new node ports and kind
-    // -- Proceed to next position in the buffer
-    PUSH1, "01",
-    ADD,
-    // -- Connect port to itself
-    DUP1,
-    DUP1,
-    MSTORE,
-
-    // -- Proceed to next position in the buffer
-    PUSH1, "01",
-    ADD,
-    // -- Connect port to itself
-    DUP1,
-    DUP1,
-    MSTORE,
-
-    // -- Proceed to next position in the buffer
-    PUSH1, "01",
-    ADD,
-    // -- Connect port to itself
-    DUP1,
-    DUP1,
-    MSTORE,
-
-    // -- Proceed to next position in the buffer
-    PUSH1, "01",
-    ADD,
-    // -- Store 'kind' in memory (Assuming its value is the next in stack)
-    MSTORE
-].join("");
-
 // node(node_id) -- Returns the memory position of a node
 // gas cost = 14
 var node = [
@@ -250,6 +196,59 @@ var kind = [
 ].join("");
 
 // NOT WORKING
+// new_node(kind) -- Allocates a new node
+// gas cost = 63 + 18*
+var new_node = [
+    // Stack contains kind -> x
+    // get buffer last writable position
+    PUSH1, "01",
+    PUSH1, BUFFER_SIZE_POS,
+    MLOAD,
+    PUSH1, "01",
+    ADD,
+    // Stack contains new_size -> 01 -> kind -> x
+    // Update buffer size
+    DUP1,
+    PUSH1, BUFFER_SIZE_POS,
+    MSTORE,
+
+    // Stack contains new_size -> 01 -> kind -> x
+    SUB,
+    // Stack contains new_node_id -> kind -> x
+    SWAP1,
+
+    PUSH1, "02",
+    DUP3,
+    port,
+    PUSH1, "01",
+    DUP4,
+    port,
+    PUSH1, "00",
+    DUP5,
+    port,
+    // Stack contains port0 -> port1 -> port2 -> kind -> new_node_id -> x
+    // Write new node ports and kind
+    // -- node x, slot 0
+    PUSH9, "010000000000000000",
+    MUL, // shift left
+    ADD,
+    // Stack contains port0port1 -> port2 -> kind -> new_node_id -> x
+    // -- node x, slot 1
+    PUSH9, "010000000000000000",
+    MUL, // shift left
+    ADD,
+    // Stack contains port0port1port2 -> kind -> new_node_id -> x
+    // -- node x, slot 2
+    PUSH9, "010000000000000000",
+    MUL, // shift left
+    ADD,
+    // Stack contains port0port1port2kind -> new_node_id -> x
+    SWAP1,
+    node, // get new_node_id memory index
+    MSTORE,
+    // Stack contains: x
+].join("");
+
 // link(portA, portB) -- Links two ports
 // gas cost = 6 + 6*
 var link = [
@@ -436,9 +435,13 @@ var nodeTest = [
     //should push position of node 0 to stack
     PUSH1, "00",
     node,
+    DUP1,
+    MLOAD,
     //should push position of node 1 to stack
     PUSH1, "01",
     node,
+    DUP1,
+    MLOAD,
 ].join("");
 
 //PASSING
@@ -558,6 +561,23 @@ var linkTest = [
 
 ].join("");
 
+// PASSING
+var newNodeTest = [
+    PUSH1, "ff", // kind = ff
+    new_node, // create new node
+
+    // get new_node_id
+    PUSH1, BUFFER_SIZE_POS,
+    MLOAD,
+    PUSH1, "01",
+    SWAP1,
+    SUB,
+    node,
+
+    // Load new node to stack
+    MLOAD,
+].join("");
+
 ////////////////////// EVM CODE //////////////////////
 var code = [
     // Load SIC graph to memory
@@ -567,7 +587,7 @@ var code = [
     CALLDATACOPY,
 
     // Code
-    linkTest,
+    newNodeTest,
 
     // Stop
     STOP
