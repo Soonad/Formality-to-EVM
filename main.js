@@ -226,17 +226,15 @@ var slot = [
     AND,
 ].join("");
 
-// NOT WORKING
-// enter(port) -- returns the value stored in port memory position
+// enter(index) -- returns the value stored in a port index
 // gas cost = 3*
 var enter = [
-    // Stack contains port -> x
+    // Stack contains index -> x
     MLOAD,
     PUSH8, "ffffffffffffffff",
     AND, // We only want the last 8 bytes
 ].join("");
 
-// NOT WORKING
 // kind(node) -- Returns the kind of the node
 // 0 = era (i.e., a set or a garbage collector)
 // 1 = con (i.e., a lambda or an application)
@@ -246,7 +244,7 @@ var kind = [
     // Stack contains node_id -> x
     node,
     MLOAD,
-    PUSH32, "000000000000000000000000000000000000000000000000ffffffffffffffff",
+    PUSH8, "ffffffffffffffff",
     AND,
     // Stack contains kind -> x
 ].join("");
@@ -261,8 +259,33 @@ var link = [
     DUP1, // Duplicate portA
     DUP3, // Duplicate portB
     // Now stack is: PortB -> PortA -> PortA -> PortB -> x
+    index,
+    SWAP1,
+    DUP2,
+    // Now stack is: IndexB -> PortA -> IndexB -> PortA -> PortB -> x
+    //Treat value to be inserted on IndexB
+    MLOAD,
+    PUSH32, "ffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000",
+    AND, // Erase last 8 bytes
+    ADD, // White new value on last 8 bytes
+    SWAP1,
+    // Now stack is: IndexB -> PortA_modif -> PortA -> PortB -> x
     MSTORE, // mem[PortB] = PortA
-    MSTORE  // mem[PortA] = PortB
+
+    // Now do the same for PortA...
+
+    // Now stack is: PortA -> PortB -> x
+    index,
+    SWAP1,
+    DUP2,
+    // Now stack is: IndexA -> PortB -> IndexA -> x
+    MLOAD,
+    PUSH32, "ffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000",
+    AND, // Erase last 8 bytes
+    ADD, // White new value on last 8 bytes
+    SWAP1,
+    // Now stack is: IndexA -> PortB_modif -> x
+    MSTORE, // mem[PortA] = PortB
     // Now stack is: x
 ].join("");
 
@@ -472,7 +495,7 @@ var slotTest = [
 var enterTest = [
     PUSH1, "00", // node 0
     PUSH1, "00", // slot 0
-    index, // index 27
+    index_ns, // index 27
     DUP1,
     enter,
     SWAP1,
@@ -502,6 +525,39 @@ var kindTest = [
     kind,
 ].join("");
 
+// PASSING
+var linkTest = [
+    // Before linking:
+    PUSH1, "03", // slot 3
+    PUSH1, "00", // node 0
+    index_ns,
+    MLOAD,
+    PUSH1, "03", // slot 3
+    PUSH1, "01", // node 1
+    index_ns,
+    MLOAD,
+
+    // Link
+    PUSH1, "02", // slot 2
+    PUSH1, "00", // node 0
+    port,
+    PUSH1, "00", // slot 0
+    PUSH1, "01", // node 1
+    port,
+    link,
+
+    // After linking:
+    PUSH1, "03", // slot 3
+    PUSH1, "00", // node 0
+    index_ns,
+    MLOAD,
+    PUSH1, "03", // slot 3
+    PUSH1, "01", // node 1
+    index_ns,
+    MLOAD,
+
+].join("");
+
 ////////////////////// EVM CODE //////////////////////
 var code = [
     // Load SIC graph to memory
@@ -511,30 +567,7 @@ var code = [
     CALLDATACOPY,
 
     // Code
-/*    PUSH1, "00", //slot 0
-    PUSH1, "01", //node 1
-    index,
-    MLOAD,
-    PUSH32, "ffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000",
-    AND,
-    PUSH1, "01", //slot 1
-    PUSH1, "00", //node 0
-    index,
-    ADD,
-
-    PUSH1, "01", //slot 0
-    PUSH1, "00", //node 1
-    index,
-    MLOAD,
-    DUP1,
-    PUSH8, "ffffffffffffffff",
-    AND,
-    PUSH1, "00", //slot 1
-    PUSH1, "01", //node 0
-    index,
-    ADD,*/
-
-    indexTest,
+    linkTest,
 
     // Stop
     STOP
