@@ -38,6 +38,8 @@ const DUP3          =   "82";
 const DUP4          =   "83";
 const DUP5          =   "84";
 const SWAP1         =   "90";
+const SWAP2         =   "91";
+const SWAP3         =   "92";
 
 /////////// Important constants ///////////
 const BUFFER_SIZE_POS = "1f"; // This value shouls be never smaller than '1f' once
@@ -126,7 +128,7 @@ var node = [
     // Stack contains: node_pos -> x
 ].join("");
 
-// port(node, slot) -- Calculate the memory position of a port
+// port(node, slot) -- Return a port given a memory index
 // A port can be understood as a (node, slot) tuple. A port is calculated by
 // abstracting how the network is stored in memory from a format:
 // RMem: [NODE0, NODE1, NODE2, ...] where each node has 256 bits and
@@ -138,26 +140,65 @@ var node = [
 // ATTENTION: You should NEVER try to MSTORE anything directly in a 'port'. This is
 // only an abstraction to make reasoning easier, not an address to be used!
 //
-// gas cost = 17
+// gas cost = 11
 var port = [
     // Stack contains node_id -> slot -> x
-    // port's position in abstract memory = BUFFER_SIZE_POS + (node_id * NODE_SIZE) + (slot+1 * 8)
-    PUSH1, "00",
-    MSTORE, // Store node_id in memory
-    // stack contains slot -> x
+    // port = (node_id * 4) + slot
+    PUSH1, "04",
+    MUL,
+    ADD,
+    // stack contains port -> x
+].join("");
+
+// index(port) -- Calculate the memory position of a port
+// gas cost = 20
+var index = [
+    // port = (node_id * 4) + slot
+    // port's position in real memory (index) = BUFFER_SIZE_POS + (node_id * NODE_SIZE) + ((slot + 1) * SLOT_SIZE)
+    // Where NODE_SIZE = 4 * SLOT_SIZE, once each node has 4 slots.
+
+    // This means: port = ((index - BUFFER_SIZE_POS)/SLOT_SIZE) - 1
+    // Which leads to: index = ((port + 1) * SLOT_SIZE) + BUFFER_SIZE_POS
+
+    // stack contains port -> x
     PUSH1, "01",
     ADD,
-    PUSH1, "08",
+    PUSH1, SLOT_SIZE,
     MUL,
-    // stack contains ((slot + 1) * 8) -> x
-    PUSH1, "00",
-    MLOAD, // load node_id from memory into stack
-    PUSH1, NODE_SIZE,
-    MUL,
-    // stack contains (node_id * NODE_SIZE) -> (slot * 8) -> x
     PUSH1, BUFFER_SIZE_POS,
     ADD,
-    ADD,
+    // stack contains index -> x
+].join("");
+
+// index(node_id, slot) -- Calculate the memory position given node_id and slot
+// gas cost = 31
+var index_ns = [
+    // port's position in real memory = BUFFER_SIZE_POS + (node_id * NODE_SIZE) + ((slot + 1) * SLOT_SIZE)
+    // Implementing this equation directly would result in a gas cost of 34
+    // so, we call "port" and "index" functions, resulting in a gas cost of 31
+    // Stack contains node_id -> slot -> x
+    port,
+    index,
+    // stack contains index -> x
+].join("");
+
+// port_i(index) -- Return a port given a memory index
+// gas_cost = 23
+var port_i = [
+    // port = (node_id * 4) + slot
+    // port's position in abstract memory = BUFFER_SIZE_POS + (node_id * NODE_SIZE) + ((slot + 1) * SLOT_SIZE)
+    // This means: port = ((index - BUFFER_SIZE_POS)/SLOT_SIZE) - 1
+
+    // Stack contains index -> x
+    PUSH1, SLOT_SIZE,
+    PUSH1, BUFFER_SIZE_POS,
+    PUSH1, "01",
+    // Stack contains 01 -> BUFFER_SIZE_POS -> SLOT_SIZE -> index -> x
+    SWAP3,
+    // Stack contains index -> BUFFER_SIZE_POS -> SLOT_SIZE -> 01 -> x
+    SUB,
+    DIV,
+    SUB,
     // stack contains port -> x
 ].join("");
 
@@ -211,10 +252,10 @@ var kind = [
 ].join("");
 
 // NOT WORKING
-// link(nodeA, nodeB, slotA, slotB) -- Links two ports
+// link(portA, portB) -- Links two ports
 // gas cost = 6 + 6*
 var link = [
-    //TODO: Each MLOAD in tthis function stores a whole 256 bits word from memory, not just the
+    //TODO: Each MLOAD in this function stores a whole 256 bits word from memory, not just the
     //      value for node port. Find a solution to this problem.
     // Stack contains: portA -> portB -> x
     DUP1, // Duplicate portA
@@ -391,6 +432,23 @@ var portTest = [
 ].join("");
 
 //PASSING
+var indexTest = [
+    PUSH1, "00", // slot 0
+    PUSH1, "00", // node 0
+    port,
+    DUP1,
+    index,
+    PUSH1, "00", // slot 0
+    PUSH1, "00", // node 0
+    index_ns,
+    PUSH1, "00", // slot 0
+    PUSH1, "00", // node 0
+    port,
+    index,
+    port_i,
+].join("");
+
+//PASSING
 var addrTest = [
     PUSH1, "27", // Node 0
     addr,
@@ -414,7 +472,7 @@ var slotTest = [
 var enterTest = [
     PUSH1, "00", // node 0
     PUSH1, "00", // slot 0
-    port, // port 27
+    index, // index 27
     DUP1,
     enter,
     SWAP1,
@@ -425,15 +483,15 @@ var enterTest = [
 var accordanceTest = [
     PUSH1, "00", // node 0
     PUSH1, "00", // slot 0
-    port, // port 27
+    index, // index 27
     PUSH1, "27",
     slot, // slot 0
     PUSH1, "27",
     addr, // node 0
     PUSH1, "27",
-    enter, // value on port 27
+    enter, // value on index 27
     PUSH1, "27",
-    MLOAD, // port 27 memory vicinity
+    MLOAD, // index 27 memory vicinity
 ].join("");
 
 // PASSING
@@ -453,7 +511,30 @@ var code = [
     CALLDATACOPY,
 
     // Code
-    kindTest,
+/*    PUSH1, "00", //slot 0
+    PUSH1, "01", //node 1
+    index,
+    MLOAD,
+    PUSH32, "ffffffffffffffffffffffffffffffffffffffffffffffff0000000000000000",
+    AND,
+    PUSH1, "01", //slot 1
+    PUSH1, "00", //node 0
+    index,
+    ADD,
+
+    PUSH1, "01", //slot 0
+    PUSH1, "00", //node 1
+    index,
+    MLOAD,
+    DUP1,
+    PUSH8, "ffffffffffffffff",
+    AND,
+    PUSH1, "00", //slot 1
+    PUSH1, "01", //node 0
+    index,
+    ADD,*/
+
+    indexTest,
 
     // Stop
     STOP
