@@ -26,6 +26,7 @@ const MSTORE        =   "52";
 const MSTORE8       =   "53";
 const JUMP          =   "56";
 const JUMPI         =   "57";
+const PC            =   "58";
 const JUMPDEST      =   "5b";
 const PUSH1         =   "60";
 const PUSH2         =   "61";
@@ -172,13 +173,21 @@ var slot = [
     AND,
 ].join("");
 
-// enter(index) -- returns the value stored in a port index
+// enter_i(index) -- returns the value stored in a port index
 // gas cost = 3*
-var enter = [
+var enter_i = [
     // Stack contains index -> x
     MLOAD,
     PUSH8, "ffffffffffffffff",
     AND, // We only want the last 8 bytes
+].join("");
+
+// enter(port) -- returns the value stored in a port
+// gas cost = 3*
+var enter = [
+    // Stack contains port -> x
+    index,
+    enter_i,
 ].join("");
 
 // kind(node) -- Returns the kind of the node
@@ -195,7 +204,6 @@ var kind = [
     // Stack contains kind -> x
 ].join("");
 
-// NOT WORKING
 // new_node(kind) -- Allocates a new node
 // gas cost = 63 + 18*
 var new_node = [
@@ -293,34 +301,37 @@ var link = [
 // gas cost: kind(x) == kind(y) ? (true = 125 + 24*) : (false = 683 + 108*)
 var rewrite = [
     // Stack contains nodeX -> nodeY -> x
+    // -- Compare the kind of both nodes
     DUP2,
     kind,
     DUP2,
     kind,
     EQ,
-    PUSH1, "xxxxx",
-    JUMPI
-    /* else */,
+    // -- if kinds are equal
+    PUSH1, "IndexOfTrueBranch", // <--- Placeholder. Will be replaced later
+    PC,
+    ADD,
+    JUMPI, // jump to other instruction
+    // -- else, continue...
     // Stack contains: nodeX -> nodeY -> x
-    DUP1,
+    PUSH1, BUFFER_SIZE_POS, // put future newNodeA_id in stack
+    DUP2,
     kind,
-    new_node,
-    PUSH1, BUFFER_SIZE_POS,
-    MLOAD,
+    new_node, // create new node
+
     // Stack contains: newNodeA -> nodeX -> nodeY -> x
-    DUP3,
+    PUSH1, BUFFER_SIZE_POS, // put future newNodeB_id in stack
+    DUP4,
     kind,
-    new_node,
-    PUSH1, BUFFER_SIZE_POS,
-    MLOAD,
+    new_node, // create new node
 
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "01",
-    DUP3,
+    DUP4,
     port,
     enter,
     PUSH1, "00",
-    DUP2,
+    DUP3,
     port,
     link, // link(enter(port(x,1)), port(b, 0))
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
@@ -361,13 +372,15 @@ var rewrite = [
     link, //link(net, port(a, 1), port(b, 1));
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "02",
+    SWAP1,
     port,
     PUSH1, "01",
-    DUP3,
+    DUP4,
     port,
     link, //link(net, port(x, 1), port(b, 2));
     // Stack contains: newNodeA -> nodeX -> nodeY -> x
     PUSH1, "02",
+    SWAP1,
     port,
     PUSH1, "01",
     DUP4,
@@ -375,21 +388,25 @@ var rewrite = [
     link, //link(net, port(a, 2), port(y, 1));
     // Stack contains: nodeX -> nodeY -> x
     PUSH1, "02",
+    SWAP1,
     port,
+    SWAP1,
     PUSH1, "02",
-    DUP3,
+    SWAP1,
     port,
     link, //link(net, port(x, 2), port(y, 2));
-    // Stack contains: nodeY -> x
-    POP,
     // Stack contains: x
-    // Jump to ent of function
-    PUSH1, "yyyyy",
+    // Jump to end of function
+    PUSH1, "IndexOfFunctionEnd", // <--- Placeholder. Will be replaced later
+    PC,
+    ADD,
     JUMP,
 
     //=======================================
-    /*if kind(x) == kind(y) -- gas cost = ??? */
-    PUSH1, "01", // <----- Position "xxxxx"
+    /*if (kind(x) == kind(y)) is true, continue from here -- gas cost = ??? */
+    // -- Stack contains: nodeX -> nodeY -> x
+    JUMPDEST, // <----- Position "IndexOfTrueBranch".
+    PUSH1, "01",
     DUP2,
     port,
     enter,
@@ -398,19 +415,27 @@ var rewrite = [
     port,
     enter,
     link,
-
+    // -- Stack contains: nodeX -> nodeY -> x
     PUSH1, "02",
+    SWAP1,
     port,
     enter,
+    SWAP1,
     PUSH1, "02",
-    DUP3,
+    SWAP1,
     port,
     enter,
     link,
     // Stack contains: x
-    JUMPDEST // <------ Position "yyyyy"
-
+    JUMPDEST, // <------ Position "IndexOfFunctionEnd"
 ].join("");
+jumpToTakenBranch = rewrite.indexOf("IndexOfTrueBranch");
+jumpToFunctionEnd = rewrite.indexOf("IndexOfFunctionEnd");
+takenBranchBegin = rewrite.indexOf(JUMPDEST);
+functionEnd = rewrite.indexOf(JUMPDEST, takenBranchBegin+1);
+
+rewrite[jumpToTakenBranch] = takenBranchBegin.toString(16);
+rewrite[jumpToFunctionEnd] = functionEnd.toString(16);
 
 // NOT WORKING
 // reduce() -- Reduces a net to normal form lazily and sequentially.
@@ -587,7 +612,8 @@ var code = [
     CALLDATACOPY,
 
     // Code
-    newNodeTest,
+    PC,
+    PC,
 
     // Stop
     STOP
