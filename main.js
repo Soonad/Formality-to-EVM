@@ -65,6 +65,7 @@ var vm = new VM();
 /////////// Functions ///////////
 // node(node_id) -- Returns the memory position of a node
 // gas cost = 14
+// PC += 6
 var node = [
     // Stack contains: node_id -> x
     // NODE_POSITION = node_id * NODE_SIZE + FIRST_NODE_POS
@@ -88,6 +89,7 @@ var node = [
 // only an abstraction to make reasoning easier, not an address to be used!
 //
 // gas cost = 11
+// PC += 4
 var port = [
     // Stack contains node_id -> slot -> x
     // port = (node_id * 4) + slot
@@ -99,6 +101,7 @@ var port = [
 
 // index(port) -- Calculate the memory position of a port
 // gas cost = 20
+// PC += 9
 var index = [
     // port = (node_id * 4) + slot
     // port's position in real memory (index) = BUFFER_SIZE_POS + (node_id * NODE_SIZE) + ((slot + 1) * SLOT_SIZE)
@@ -119,6 +122,7 @@ var index = [
 
 // index(node_id, slot) -- Calculate the memory position given node_id and slot
 // gas cost = 31
+// PC += 13
 var index_ns = [
     // port's position in real memory = BUFFER_SIZE_POS + (node_id * NODE_SIZE) + ((slot + 1) * SLOT_SIZE)
     // Implementing this equation directly would result in a gas cost of 34
@@ -131,6 +135,7 @@ var index_ns = [
 
 // port_i(index) -- Return a port given a memory index
 // gas_cost = 23
+// PC += 10
 var port_i = [
     // port = (node_id * 4) + slot
     // port's position in abstract memory = BUFFER_SIZE_POS + (node_id * NODE_SIZE) + ((slot + 1) * SLOT_SIZE)
@@ -151,6 +156,7 @@ var port_i = [
 
 // addr (port) -- Returns the node to which a port belongs
 // gas cost = 26 + 6*
+// PC += 8
 var addr = [
     // Stack contains port -> x
     PUSH1, BUFFER_SIZE_POS,
@@ -164,6 +170,7 @@ var addr = [
 
 // slot(port) -- Returns the slot of a port
 // gas cost = 9
+// PC += 7
 var slot = [
     // Stack contains port -> x
     PUSH1, SLOT_SIZE,
@@ -175,6 +182,7 @@ var slot = [
 
 // enter_i(index) -- returns the value stored in a port index
 // gas cost = 3*
+// PC += 11
 var enter_i = [
     // Stack contains index -> x
     MLOAD,
@@ -184,6 +192,7 @@ var enter_i = [
 
 // enter(port) -- returns the value stored in a port
 // gas cost = 3*
+// PC += 20
 var enter = [
     // Stack contains port -> x
     index,
@@ -195,6 +204,7 @@ var enter = [
 // 1 = con (i.e., a lambda or an application)
 // 2 = fan (i.e., a pair or a let)
 // gas cost = 18 + 3*
+// PC += 10
 var kind = [
     // Stack contains node_id -> x
     node,
@@ -206,6 +216,7 @@ var kind = [
 
 // new_node(kind) -- Allocates a new node
 // gas cost = 63 + 18*
+// PC += 79
 var new_node = [
     // Stack contains kind -> x
     // get buffer last writable position
@@ -259,6 +270,7 @@ var new_node = [
 
 // link(portA, portB) -- Links two ports
 // gas cost = 6 + 6*
+// PC += 100
 var link = [
     //TODO: Each MLOAD in this function stores a whole 256 bits word from memory, not just the
     //      value for node port. Find a solution to this problem.
@@ -296,22 +308,22 @@ var link = [
     // Now stack is: x
 ].join("");
 
-// NOT WORKING
 // rewrite(nodeX, nodeY) -- Rewrites an active pair
 // gas cost: kind(x) == kind(y) ? (true = 125 + 24*) : (false = 683 + 108*)
-var rewrite = [
+var rewrite_ = [
     // Stack contains nodeX -> nodeY -> x
     // -- Compare the kind of both nodes
-    DUP2,
+    // PC = X
+    DUP2, // PC = X+1
     kind,
     DUP2,
     kind,
     EQ,
     // -- if kinds are equal
-    PUSH1, "IndexOfTrueBranch", // <--- Placeholder. Will be replaced later
-    PC,
+    PUSH2, "IndexOfTakenBranch", // <--- Placeholder. Will be replaced later
+    PC, // PC = X + 27
     ADD,
-    JUMPI, // jump to other instruction
+    JUMPI, // jump to the other branch
     // -- else, continue...
     // Stack contains: nodeX -> nodeY -> x
     PUSH1, BUFFER_SIZE_POS, // put future newNodeA_id in stack
@@ -324,7 +336,7 @@ var rewrite = [
     DUP4,
     kind,
     new_node, // create new node
-
+//186
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "01",
     DUP4,
@@ -334,6 +346,7 @@ var rewrite = [
     DUP3,
     port,
     link, // link(enter(port(x,1)), port(b, 0))
+//320
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "00",
     DUP5,
@@ -343,6 +356,7 @@ var rewrite = [
     port,
     enter,
     link, // link(port(y,0), enter(port(x, 2)))
+//454
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "01",
     DUP5,
@@ -352,6 +366,7 @@ var rewrite = [
     DUP4,
     port,
     link, //link(enter(port(y,1)), port(a, 0))
+//588
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "02",
     DUP5,
@@ -361,7 +376,7 @@ var rewrite = [
     DUP5,
     port,
     link, //link(enter(port(y,2)), port(x, 0))
-
+//722
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "01",
     DUP3,
@@ -370,6 +385,7 @@ var rewrite = [
     DUP3,
     port,
     link, //link(net, port(a, 1), port(b, 1));
+//836
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "02",
     SWAP1,
@@ -378,6 +394,7 @@ var rewrite = [
     DUP4,
     port,
     link, //link(net, port(x, 1), port(b, 2));
+//950
     // Stack contains: newNodeA -> nodeX -> nodeY -> x
     PUSH1, "02",
     SWAP1,
@@ -386,6 +403,7 @@ var rewrite = [
     DUP4,
     port,
     link, //link(net, port(a, 2), port(y, 1));
+//1064
     // Stack contains: nodeX -> nodeY -> x
     PUSH1, "02",
     SWAP1,
@@ -395,17 +413,18 @@ var rewrite = [
     SWAP1,
     port,
     link, //link(net, port(x, 2), port(y, 2));
+//1179
     // Stack contains: x
     // Jump to end of function
-    PUSH1, "IndexOfFunctionEnd", // <--- Placeholder. Will be replaced later
-    PC,
+    PUSH2, "IndexOfFunctionEnd", // <--- Placeholder. Will be replaced later. PC = X + 1182
+    PC, // PC = END - 313 = X + 1183
     ADD,
     JUMP,
 
     //=======================================
     /*if (kind(x) == kind(y)) is true, continue from here -- gas cost = ??? */
     // -- Stack contains: nodeX -> nodeY -> x
-    JUMPDEST, // <----- Position "IndexOfTrueBranch".
+    JUMPDEST, // <----- Position "IndexOfTakenBranch". PC = END - 310 = X + 1186
     PUSH1, "01",
     DUP2,
     port,
@@ -427,15 +446,21 @@ var rewrite = [
     enter,
     link,
     // Stack contains: x
-    JUMPDEST, // <------ Position "IndexOfFunctionEnd"
-].join("");
-jumpToTakenBranch = rewrite.indexOf("IndexOfTrueBranch");
-jumpToFunctionEnd = rewrite.indexOf("IndexOfFunctionEnd");
-takenBranchBegin = rewrite.indexOf(JUMPDEST);
-functionEnd = rewrite.indexOf(JUMPDEST, takenBranchBegin+1);
+    JUMPDEST, // <------ Position "IndexOfFunctionEnd". PC = END = X + 1496
 
-rewrite[jumpToTakenBranch] = takenBranchBegin.toString(16);
-rewrite[jumpToFunctionEnd] = functionEnd.toString(16);
+];
+var jumpToTakenBranch = rewrite_.indexOf("IndexOfTakenBranch"); //25
+var jumpToFunctionEnd = rewrite_.indexOf("IndexOfFunctionEnd"); //
+
+//TODO find a better way of doing this whithout hardcoding values
+var takenBranchBegin = "04B0";
+var functionEnd = "0139"
+
+rewrite_[jumpToTakenBranch] = takenBranchBegin.toString(16);
+rewrite_[jumpToFunctionEnd] = functionEnd;
+
+var rewrite = rewrite_.join("");
+
 
 // NOT WORKING
 // reduce() -- Reduces a net to normal form lazily and sequentially.
@@ -612,13 +637,37 @@ var code = [
     CALLDATACOPY,
 
     // Code
-    PC,
-    PC,
+    PUSH1, "00",
+    PUSH1, "01",
+    rewrite,
+
+    PUSH1, "00",
+    node,
+    MLOAD,
+
+    PUSH1, "01",
+    node,
+    MLOAD,
+
+    PUSH1, "02",
+    node,
+    MLOAD,
+
+    PUSH1, "03",
+    node,
+    MLOAD,
 
     // Stop
     STOP
 ].join("");
+console.log("CODE: ");
 console.log(code);
+console.log("\n\n")
+console.log("DATA: ");
+console.log(["0000000000000000000000000000000000000000000000000000000000000002", // size
+                   "0000000000000004 0000000000000005 0000000000000006 0000000000000001", // node 1
+                   "0000000000000000 0000000000000001 0000000000000002 0000000000000001", // node 2
+               ].join('').split(' ').join(''));
 /*
 const until = (stop, fn, val) => !stop(val) ? until(stop, fn, fn(val)) : val;
 const lpad = (len, chr, str) => until((s) => s.length === len, (s) => chr + s, str);
