@@ -14,6 +14,8 @@ const ADD           =   "01";
 const MUL           =   "02";
 const SUB           =   "03";
 const DIV           =   "04";
+const LT            =   "10";
+const GT            =   "11";
 const EQ            =   "14";
 const AND           =   "16";
 const OR            =   "17";
@@ -336,7 +338,7 @@ var rewrite_ = [
     DUP4,
     kind,
     new_node, // create new node
-//186
+
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "01",
     DUP4,
@@ -346,7 +348,7 @@ var rewrite_ = [
     DUP3,
     port,
     link, // link(enter(port(x,1)), port(b, 0))
-//320
+
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "00",
     DUP5,
@@ -356,7 +358,7 @@ var rewrite_ = [
     port,
     enter,
     link, // link(port(y,0), enter(port(x, 2)))
-//454
+
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "01",
     DUP5,
@@ -366,7 +368,7 @@ var rewrite_ = [
     DUP4,
     port,
     link, //link(enter(port(y,1)), port(a, 0))
-//588
+
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "02",
     DUP5,
@@ -376,7 +378,7 @@ var rewrite_ = [
     DUP5,
     port,
     link, //link(enter(port(y,2)), port(x, 0))
-//722
+
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "01",
     DUP3,
@@ -385,7 +387,7 @@ var rewrite_ = [
     DUP3,
     port,
     link, //link(net, port(a, 1), port(b, 1));
-//836
+
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "02",
     SWAP1,
@@ -394,7 +396,7 @@ var rewrite_ = [
     DUP4,
     port,
     link, //link(net, port(x, 1), port(b, 2));
-//950
+
     // Stack contains: newNodeA -> nodeX -> nodeY -> x
     PUSH1, "02",
     SWAP1,
@@ -403,7 +405,7 @@ var rewrite_ = [
     DUP4,
     port,
     link, //link(net, port(a, 2), port(y, 1));
-//1064
+
     // Stack contains: nodeX -> nodeY -> x
     PUSH1, "02",
     SWAP1,
@@ -413,7 +415,7 @@ var rewrite_ = [
     SWAP1,
     port,
     link, //link(net, port(x, 2), port(y, 2));
-//1179
+
     // Stack contains: x
     // Jump to end of function
     PUSH2, "IndexOfFunctionEnd", // <--- Placeholder. Will be replaced later. PC = X + 1182
@@ -465,17 +467,96 @@ var rewrite = rewrite_.join("");
 // NOT WORKING
 // reduce() -- Reduces a net to normal form lazily and sequentially.
 var reduce = [
-    // TODO
-    JUMPDEST,
+    // Stack contains: x
+    PUSH1, "00", // s = Slot 0
+    PUSH1, "00", // n = Node 0
+    port,
+    enter, // next = enter(port(n, s));
+
+    JUMPDEST, // <----- WhileLoopStart
+    // Stack contains: next -> x
+    PUSH1, "00", // Comparison (next > 0)
+    DUP2,
+    GT,
+    NOT,
+    // TODO: Implement 'warp' vector len
+    PUSH2, "IndexOfFunctionEnd",
+    PC,
+    ADD,
+    JUMPI, // while next > 0 || warp.len > 0
+
+    // Stack contains: next -> x
+    // if next == 0
+    PUSH1, "00",
+    DUP2,
+    EQ,
+    NOT,
+    PUSH2, "IndexOfNotTakenBranch_next",
+    PC,
+    ADD,
+    JUMPI,
+    // TODO: Implement 'next = enter(net, warp.pop().unwrap())'
+    JUMPDEST, // <--- IndexOfNotTakenBranch_next
+    // else, do nothing
+    DUP1,
+    enter, // prev = enter(net, next);
+    // Stack contains: prev -> next -> x
+    // if slot(next) == 0 && slot(prev) == 0 && addr(prev) != 0 {
+    DUP2,
+    slot,
+    ISZERO,
+
+    DUP2,
+    slot,
+    ISZERO,
+
+    DUP3,
+    addr,
+    ISZERO,
+    NOT,
+
+    AND,
+    AND,
+
+    NOT,
+    PUSH2, "IndexOfNotTakenBranch_if1_while",
+    JUMPI,
+
     /*
-    let mut warp : Vec<u32> = Vec::new();
-    let mut exit : Vec<u32> = Vec::new();
-    let mut next : Port = net.nodes[0];
-    let mut prev : Port;
-    let mut back : Port;
+      TODO:
+      back = enter(net, port(addr(prev), exit.pop().unwrap()));
+      rewrite(net, addr(prev), addr(next));
+      next = enter(net, back);
+      */
+
+    // else if slot(next) == 0 {
+    JUMPDEST, // <---- IndexOfNotTakenBranch_if_while
+    // Stack contains: prev -> next -> x
+    DUP2,
+    slot,
+    ISZERO,
+
+    NOT,
+    PUSH2, "IndexOfNotTakenBranch_if2_while",
+    JUMPI,
+
+    /*
+      TODO:
+      warp.push(port(addr(next), 2));
+      next = enter(net, port(addr(next), 1));
     */
 
-    /* while next > 0 || warp.len() > 0 */
+    // else {
+    JUMPDEST, // <---- IndexOfNotTakenBranch_if2_while
+    /*
+      TODO:
+      exit.push(slot(next));
+      next = enter(net, port(addr(next), 0));
+    */
+
+    PUSH2, "WhileLoopStart",
+    JUMP,
+    JUMPDEST, // <---- IndexOfFunctionEnd
 
 ].join("");
 
