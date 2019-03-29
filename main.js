@@ -17,6 +17,7 @@ const DIV           =   "04";
 const LT            =   "10";
 const GT            =   "11";
 const EQ            =   "14";
+const ISZERO        =   "15";
 const AND           =   "16";
 const OR            =   "17";
 const XOR           =   "18";
@@ -35,6 +36,7 @@ const PUSH2         =   "61";
 const PUSH4         =   "63";
 const PUSH8         =   "67";
 const PUSH9         =   "68";
+const PUSH16        =   "6f";
 const PUSH32        =   "7f";
 const DUP1          =   "80";
 const DUP2          =   "81";
@@ -45,10 +47,12 @@ const SWAP1         =   "90";
 const SWAP2         =   "91";
 const SWAP3         =   "92";
 
-/////////// Important constants ///////////
-const BUFFER_SIZE_POS = "1f"; // This value shouls be never smaller than '1f' once
-                              // the code needs at least 32 byte reserved memory to run
+/////////// Important Memory Addresses ///////////
+const EXIT_BUFFER_INIT  = "3e00";
+const WARP_BUFFER_INIT  = "1f00";
+const BUFFER_SIZE_POS   = "1f"; // TODO: Prepare code for receiving 2 bytes instead of 1 with BUFFER_SIZE_POS
 
+/////////// Important constants ///////////
 const SLOT_SIZE = "08"; // Hex size, in bytes, of a slot.
 const NODE_SIZE = (parseInt(SLOT_SIZE, 16) * 4).toString(16); //Each node has 4 slots
 
@@ -458,62 +462,135 @@ var jumpToFunctionEnd = rewrite_.indexOf("IndexOfFunctionEnd"); //
 var takenBranchBegin = "04B0";
 var functionEnd = "0139"
 
-rewrite_[jumpToTakenBranch] = takenBranchBegin.toString(16);
+rewrite_[jumpToTakenBranch] = takenBranchBegin;
 rewrite_[jumpToFunctionEnd] = functionEnd;
 
 var rewrite = rewrite_.join("");
 
+// push(buffer_init, value) -- Pushes a value to the end of a buffer
+var push = [
+    // Stack contains BUFFER_INIT -> VALUE -> x
+    // Get buffer size
+    DUP1,
+    MLOAD,
+
+    // Stack contains BUFFER_LEN -> BUFFER_INIT -> VALUE -> x
+    // Add 1 to buffer len and update value in memory
+    PUSH1, "01",
+    DUP2,
+    ADD,
+    DUP3,
+    MSTORE,
+
+    // Push desired value to buffer
+    // Stack contains BUFFER_SIZE -> BUFFER_INIT -> VALUE -> x
+    ADD,
+    MSTORE,
+].join("");
+
+// pop(buffer_init) -- Removes value from the end of a buffer and pushes it to stack
+var pop = [
+    // Stack contains BUFFER_INIT -> x
+    DUP1,
+    MLOAD,
+
+    // Subtract 1 from buffer len and update value in memory
+    // Stack contains BUFFER_SIZE -> BUFFER_INIT -> x
+    PUSH1, "01",
+    DUP2,
+    SUB,
+    DUP3,
+    MSTORE,
+
+    // Push desired value to stack
+    // Stack contains BUFFER_SIZE -> BUFFER_INIT -> x
+    ADD,
+    MLOAD,
+].join("");
 
 // NOT WORKING
 // reduce() -- Reduces a net to normal form lazily and sequentially.
-var reduce = [
+var reduce_ = [
     // Stack contains: x
+    PUSH2, "00",
+    PUSH2, WARP_BUFFER_INIT,
+    MSTORE, //let mut warp : Vec<u32> = Vec::new();
+
+    PUSH2, "00",
+    PUSH2, EXIT_BUFFER_INIT,
+    MSTORE,//let mut exit : Vec<u32> = Vec::new();
+
+    // Stack contains: x
+    PUSH1, "00", // back = 0
+    PUSH1, "00", // prev = 0
     PUSH1, "00", // s = Slot 0
     PUSH1, "00", // n = Node 0
     port,
     enter, // next = enter(port(n, s));
 
-    JUMPDEST, // <----- WhileLoopStart
-    // Stack contains: next -> x
-    PUSH1, "00", // Comparison (next > 0)
+    JUMPDEST, // <----- IndexOfWhileLoopStart
+    // Stack contains: next -> prev -> back -> x
+    // -- Comparison (next > 0)
+    PUSH1, "00",
     DUP2,
     GT,
+
+    // -- Comparison warp.len() > 0
+    PUSH2, WARP_BUFFER_INIT,
+    MLOAD,
+    PUSH1, "00",
+    GT,
+
+    OR,
     NOT,
-    // TODO: Implement 'warp' vector len
+
     PUSH2, "IndexOfFunctionEnd",
     PC,
     ADD,
     JUMPI, // while next > 0 || warp.len > 0
 
-    // Stack contains: next -> x
+    // Stack contains: next -> prev -> back -> x
     // if next == 0
-    PUSH1, "00",
-    DUP2,
-    EQ,
+    DUP1,
+    ISZERO,
     NOT,
     PUSH2, "IndexOfNotTakenBranch_next",
     PC,
     ADD,
     JUMPI,
-    // TODO: Implement 'next = enter(net, warp.pop().unwrap())'
-    JUMPDEST, // <--- IndexOfNotTakenBranch_next
+
+    // next = enter(net, warp.pop().unwrap())
+    // Stack contains: next -> prev -> back -> x
+    PUSH2, WARP_BUFFER_INIT,
+    pop,
+    enter, // Stack contains: next_new -> next_old -> prev -> back -> x
+    SWAP1,
+    POP,   // // Stack contains: next_new -> prev -> back -> x
+
     // else, do nothing
+    JUMPDEST, // <--- IndexOfNotTakenBranch_next
+
+    // prev = enter(net, next);
+    // Stack contains: next -> prev -> back -> x
     DUP1,
-    enter, // prev = enter(net, next);
-    // Stack contains: prev -> next -> x
+    enter,
+    SWAP2,
+    POP,
+
+    // Stack contains: next -> prev -> back -> x
     // if slot(next) == 0 && slot(prev) == 0 && addr(prev) != 0 {
     DUP2,
     slot,
-    ISZERO,
+    ISZERO, // slot(prev) == 0
 
     DUP2,
     slot,
-    ISZERO,
+    ISZERO, // slot(next) == 0
 
-    DUP3,
+    DUP4,
     addr,
     ISZERO,
-    NOT,
+    NOT, // addr(prev) != 0
 
     AND,
     AND,
@@ -522,17 +599,40 @@ var reduce = [
     PUSH2, "IndexOfNotTakenBranch_if1_while",
     JUMPI,
 
-    /*
-      TODO:
-      back = enter(net, port(addr(prev), exit.pop().unwrap()));
-      rewrite(net, addr(prev), addr(next));
-      next = enter(net, back);
-      */
+    // Stack contains: next -> prev -> back -> x
+    // -- back = enter(net, port(addr(prev), exit.pop().unwrap()));
+    PUSH2, EXIT_BUFFER_INIT,
+    pop, // exit.pop()
 
-    // else if slot(next) == 0 {
-    JUMPDEST, // <---- IndexOfNotTakenBranch_if_while
-    // Stack contains: prev -> next -> x
+    DUP3,
+    addr, // addr(prev)
+
+    port,
+    enter,
+
+    SWAP3, // back = enter(port(addr(prev), exit.pop()))
+    POP,
+
+    // -- rewrite(net, addr(prev), addr(next));
     DUP2,
+    addr,
+
+    DUP2,
+    addr,
+
+    rewrite,
+
+    // next = enter(net, back);
+    DUP3,
+    enter,
+    SWAP1,
+    POP,
+    // Stack contains: next_new -> prev -> back -> x
+
+    JUMPDEST, // <---- IndexOfNotTakenBranch_if_while
+    // Stack contains: next -> prev -> back -> x
+    // else if slot(next) == 0 {
+    DUP1,
     slot,
     ISZERO,
 
@@ -540,25 +640,66 @@ var reduce = [
     PUSH2, "IndexOfNotTakenBranch_if2_while",
     JUMPI,
 
-    /*
-      TODO:
-      warp.push(port(addr(next), 2));
-      next = enter(net, port(addr(next), 1));
-    */
+    // Stack contains: next -> prev -> back -> x
+    // warp.push(port(addr(next), 2));
+    PUSH1, "02",
+    DUP2,
+    addr,
+    port,
+    PUSH2, WARP_BUFFER_INIT,
+    push,
+
+    // next = enter(net, port(addr(next), 1));
+    PUSH1, "01",
+    SWAP1,
+    addr,
+    port,
+    enter,
+    // Stack contains: next_new -> prev -> back -> x
 
     // else {
     JUMPDEST, // <---- IndexOfNotTakenBranch_if2_while
-    /*
-      TODO:
-      exit.push(slot(next));
-      next = enter(net, port(addr(next), 0));
-    */
+    // Stack contains: next -> prev -> back -> x
+    //  exit.push(slot(next));
+    DUP1,
+    slot,
+    PUSH2, EXIT_BUFFER_INIT,
+    push,
 
-    PUSH2, "WhileLoopStart",
+    // next = enter(net, port(addr(next), 0));
+    PUSH1, "00",
+    SWAP1,
+    addr,
+    port,
+    enter,
+
+    PUSH2, "IndexOfWhileLoopStart",
     JUMP,
     JUMPDEST, // <---- IndexOfFunctionEnd
 
-].join("");
+];
+
+var jumpToFunctionEnd = reduce_.indexOf("IndexOfFunctionEnd"); //
+var jumpToNotTakenBranchNext = reduce_.indexOf("IndexOfNotTakenBranch_next"); //
+var jumpToNotTakenBranchIf1While = reduce_.indexOf("IndexOfNotTakenBranch_if1_while"); //
+var jumpToNotTakenBranchIf2While = reduce_.indexOf("IndexOfNotTakenBranch_if2_while"); //
+var jumpToWhileLoopStart = reduce_.indexOf("IndexOfWhileLoopStart"); //
+
+// TODO find a better way of doing this whithout hardcoding values
+// TODO find the correct values for these variables
+var IndexOfFunctionEnd = "xxxx"
+var IndexOfNotTakenBranch_next = "xxxx";
+var IndexOfNotTakenBranch_if1_while = "xxxx";
+var IndexOfNotTakenBranch_if2_while = "xxxx";
+var IndexOfWhileLoopStart = "xxxx";
+
+reduce_[jumpToFunctionEnd] = IndexOfFunctionEnd;
+reduce_[jumpToNotTakenBranchNext] = IndexOfNotTakenBranch_next;
+reduce_[jumpToNotTakenBranchIf1While] = IndexOfNotTakenBranch_if1_while;
+reduce_[jumpToNotTakenBranchIf2While] = IndexOfNotTakenBranch_if2_while;
+reduce_[jumpToWhileLoopStart] = IndexOfWhileLoopStart;
+
+var reduce = reduce_.join("");
 
 ////////////////////// TESTS //////////////////////
 // PASSING
@@ -718,25 +859,7 @@ var code = [
     CALLDATACOPY,
 
     // Code
-    PUSH1, "00",
-    PUSH1, "01",
-    rewrite,
-
-    PUSH1, "00",
-    node,
-    MLOAD,
-
-    PUSH1, "01",
-    node,
-    MLOAD,
-
-    PUSH1, "02",
-    node,
-    MLOAD,
-
-    PUSH1, "03",
-    node,
-    MLOAD,
+    nodeTest,
 
     // Stop
     STOP
