@@ -278,8 +278,6 @@ var new_node = [
 // gas cost = 6 + 6*
 // PC += 100
 var link = [
-    //TODO: Each MLOAD in this function stores a whole 256 bits word from memory, not just the
-    //      value for node port. Find a solution to this problem.
     // Stack contains: portA -> portB -> x
     DUP1, // Duplicate portA
     DUP3, // Duplicate portB
@@ -316,6 +314,7 @@ var link = [
 
 // rewrite(nodeX, nodeY) -- Rewrites an active pair
 // gas cost: kind(x) == kind(y) ? (true = 125 + 24*) : (false = 683 + 108*)
+// PC += ?
 var rewrite_ = [
     // Stack contains nodeX -> nodeY -> x
     // -- Compare the kind of both nodes
@@ -333,12 +332,14 @@ var rewrite_ = [
     // -- else, continue...
     // Stack contains: nodeX -> nodeY -> x
     PUSH1, BUFFER_SIZE_POS, // put future newNodeA_id in stack
+    MLOAD,
     DUP2,
     kind,
     new_node, // create new node
 
     // Stack contains: newNodeA -> nodeX -> nodeY -> x
     PUSH1, BUFFER_SIZE_POS, // put future newNodeB_id in stack
+    MLOAD,
     DUP4,
     kind,
     new_node, // create new node
@@ -351,7 +352,7 @@ var rewrite_ = [
     PUSH1, "00",
     DUP3,
     port,
-    link, // link(enter(port(x,1)), port(b, 0))
+    link, // link(port(b, 0), enter(port(x,1)))
 
     // Stack contains: newNodeB -> newNodeA -> nodeX -> nodeY -> x
     PUSH1, "00",
@@ -459,7 +460,7 @@ var jumpToTakenBranch = rewrite_.indexOf("IndexOfTakenBranch"); //25
 var jumpToFunctionEnd = rewrite_.indexOf("IndexOfFunctionEnd"); //
 
 //TODO find a better way of doing this whithout hardcoding values
-var takenBranchBegin = "04B0";
+var takenBranchBegin = "04B2";
 var functionEnd = "0139"
 
 rewrite_[jumpToTakenBranch] = takenBranchBegin;
@@ -468,6 +469,7 @@ rewrite_[jumpToFunctionEnd] = functionEnd;
 var rewrite = rewrite_.join("");
 
 // push(buffer_init, value) -- Pushes a value to the end of a buffer
+// PC += 10
 var push = [
     // Stack contains BUFFER_INIT -> VALUE -> x
     // Get buffer size
@@ -489,6 +491,7 @@ var push = [
 ].join("");
 
 // pop(buffer_init) -- Removes value from the end of a buffer and pushes it to stack
+// PC += 10
 var pop = [
     // Stack contains BUFFER_INIT -> x
     DUP1,
@@ -512,11 +515,11 @@ var pop = [
 // reduce() -- Reduces a net to normal form lazily and sequentially.
 var reduce_ = [
     // Stack contains: x
-    PUSH2, "00",
+    PUSH1, "00",
     PUSH2, WARP_BUFFER_INIT,
     MSTORE, //let mut warp : Vec<u32> = Vec::new();
 
-    PUSH2, "00",
+    PUSH1, "00",
     PUSH2, EXIT_BUFFER_INIT,
     MSTORE,//let mut exit : Vec<u32> = Vec::new();
 
@@ -528,7 +531,7 @@ var reduce_ = [
     port,
     enter, // next = enter(port(n, s));
 
-    JUMPDEST, // <----- IndexOfWhileLoopStart
+    JUMPDEST, // <----- IndexOfWhileLoopStart = 0x2D = 45
     // Stack contains: next -> prev -> back -> x
     // -- Comparison (next > 0)
     PUSH1, "00",
@@ -558,7 +561,7 @@ var reduce_ = [
     PC,
     ADD,
     JUMPI,
-
+//73
     // next = enter(net, warp.pop().unwrap())
     // Stack contains: next -> prev -> back -> x
     PUSH2, WARP_BUFFER_INIT,
@@ -566,9 +569,9 @@ var reduce_ = [
     enter, // Stack contains: next_new -> next_old -> prev -> back -> x
     SWAP1,
     POP,   // // Stack contains: next_new -> prev -> back -> x
-
+//108
     // else, do nothing
-    JUMPDEST, // <--- IndexOfNotTakenBranch_next
+    JUMPDEST, // <--- IndexOfNotTakenBranch_next = 0x6D = 109
 
     // prev = enter(net, next);
     // Stack contains: next -> prev -> back -> x
@@ -576,70 +579,70 @@ var reduce_ = [
     enter,
     SWAP2,
     POP,
-
+//132
     // Stack contains: next -> prev -> back -> x
     // if slot(next) == 0 && slot(prev) == 0 && addr(prev) != 0 {
     DUP2,
     slot,
     ISZERO, // slot(prev) == 0
-
+//141
     DUP2,
     slot,
     ISZERO, // slot(next) == 0
-
+//150
     DUP4,
     addr,
     ISZERO,
     NOT, // addr(prev) != 0
-
+//161
     AND,
     AND,
-
+//163
     NOT,
     PUSH2, "IndexOfNotTakenBranch_if1_while",
     JUMPI,
-
+//168
     // Stack contains: next -> prev -> back -> x
     // -- back = enter(net, port(addr(prev), exit.pop().unwrap()));
     PUSH2, EXIT_BUFFER_INIT,
     pop, // exit.pop()
-
+//181
     DUP3,
     addr, // addr(prev)
-
+//190
     port,
     enter,
-
+//214
     SWAP3, // back = enter(port(addr(prev), exit.pop()))
     POP,
 
     // -- rewrite(net, addr(prev), addr(next));
     DUP2,
     addr,
-
+//225
     DUP2,
     addr,
-
-    rewrite,
-
+//234
+    rewrite, // PC += X
+//234 + X
     // next = enter(net, back);
     DUP3,
     enter,
     SWAP1,
     POP,
     // Stack contains: next_new -> prev -> back -> x
-
-    JUMPDEST, // <---- IndexOfNotTakenBranch_if_while
+//257 + X
+    JUMPDEST, // <---- IndexOfNotTakenBranch_if_while = 258 + X
     // Stack contains: next -> prev -> back -> x
     // else if slot(next) == 0 {
     DUP1,
     slot,
     ISZERO,
-
+// 267 + X
     NOT,
     PUSH2, "IndexOfNotTakenBranch_if2_while",
     JUMPI,
-
+// 272+X
     // Stack contains: next -> prev -> back -> x
     // warp.push(port(addr(next), 2));
     PUSH1, "02",
@@ -648,7 +651,7 @@ var reduce_ = [
     port,
     PUSH2, WARP_BUFFER_INIT,
     push,
-
+// 300 + X
     // next = enter(net, port(addr(next), 1));
     PUSH1, "01",
     SWAP1,
@@ -656,26 +659,26 @@ var reduce_ = [
     port,
     enter,
     // Stack contains: next_new -> prev -> back -> x
-
+//335+X
     // else {
-    JUMPDEST, // <---- IndexOfNotTakenBranch_if2_while
+    JUMPDEST, // <---- IndexOfNotTakenBranch_if2_while = 336+X
     // Stack contains: next -> prev -> back -> x
     //  exit.push(slot(next));
     DUP1,
     slot,
     PUSH2, EXIT_BUFFER_INIT,
     push,
-
+//356+X
     // next = enter(net, port(addr(next), 0));
     PUSH1, "00",
     SWAP1,
     addr,
     port,
     enter,
-
+//391+X
     PUSH2, "IndexOfWhileLoopStart",
     JUMP,
-    JUMPDEST, // <---- IndexOfFunctionEnd
+    JUMPDEST, // <---- IndexOfFunctionEnd = 396+X
 
 ];
 
@@ -850,6 +853,52 @@ var newNodeTest = [
     MLOAD,
 ].join("");
 
+// PASSING
+var rewriteTest = [
+    // Push nodes contents to stack before rewriting
+    PUSH1, "00",
+    node,
+    MLOAD,
+
+    PUSH1, "01",
+    node,
+    MLOAD,
+
+    PUSH1, "02",
+    node,
+    MLOAD,
+
+    // Rewrite
+    PUSH1, "01", // Node 0
+    PUSH1, "02", // Node 1
+    rewrite,
+
+    // Push nodes contents to stack after rewriting
+    PUSH1, "00",
+    node,
+    MLOAD,
+
+    PUSH1, "01",
+    node,
+    MLOAD,
+
+    PUSH1, "02",
+    node,
+    MLOAD,
+
+    PUSH1, "03",
+    node,
+    MLOAD,
+
+    PUSH1, "04",
+    node,
+    MLOAD,
+
+    // Push memory size to stack after rewriting
+    PUSH1, BUFFER_SIZE_POS,
+    MLOAD,
+].join("");
+
 ////////////////////// EVM CODE //////////////////////
 var code = [
     // Load SIC graph to memory
@@ -859,7 +908,7 @@ var code = [
     CALLDATACOPY,
 
     // Code
-    nodeTest,
+    rewriteTest,
 
     // Stop
     STOP
@@ -868,10 +917,11 @@ console.log("CODE: ");
 console.log(code);
 console.log("\n\n")
 console.log("DATA: ");
-console.log(["0000000000000000000000000000000000000000000000000000000000000002", // size
-                   "0000000000000004 0000000000000005 0000000000000006 0000000000000001", // node 1
-                   "0000000000000000 0000000000000001 0000000000000002 0000000000000001", // node 2
-               ].join('').split(' ').join(''));
+console.log(["0000000000000000000000000000000000000000000000000000000000000003", // size
+             "0000000000000000 0000000000000005 0000000000000006 0000000000000001", // node 0
+             "0000000000000008 0000000000000001 0000000000000002 0000000000000003", // node 1
+             "0000000000000004 0000000000000009 000000000000000a 0000000000000004", // node 2
+            ].join('').split(' ').join(''));
 /*
 const until = (stop, fn, val) => !stop(val) ? until(stop, fn, fn(val)) : val;
 const lpad = (len, chr, str) => until((s) => s.length === len, (s) => chr + s, str);
