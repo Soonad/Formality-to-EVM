@@ -314,7 +314,7 @@ var link = [
 
 // rewrite(nodeX, nodeY) -- Rewrites an active pair
 // gas cost: kind(x) == kind(y) ? (true = 125 + 24*) : (false = 683 + 108*)
-// PC += ?
+// PC += 1554
 var rewrite_ = [
     // Stack contains nodeX -> nodeY -> x
     // -- Compare the kind of both nodes
@@ -518,19 +518,20 @@ var reduce_ = [
     PUSH1, "00",
     PUSH2, WARP_BUFFER_INIT,
     MSTORE, //let mut warp : Vec<u32> = Vec::new();
-
+//6
     PUSH1, "00",
     PUSH2, EXIT_BUFFER_INIT,
     MSTORE,//let mut exit : Vec<u32> = Vec::new();
-
+//12
     // Stack contains: x
     PUSH1, "00", // back = 0
     PUSH1, "00", // prev = 0
     PUSH1, "00", // s = Slot 0
     PUSH1, "00", // n = Node 0
+//20
     port,
     enter, // next = enter(port(n, s));
-
+//44
     JUMPDEST, // <----- IndexOfWhileLoopStart = 0x2D = 45
     // Stack contains: next -> prev -> back -> x
     // -- Comparison (next > 0)
@@ -543,22 +544,22 @@ var reduce_ = [
     MLOAD,
     PUSH1, "00",
     GT,
-
+//56
     OR,
     NOT,
-
+//58
     PUSH2, "IndexOfFunctionEnd",
-    PC,
+    PC, //62
     ADD,
     JUMPI, // while next > 0 || warp.len > 0
-
+//64
     // Stack contains: next -> prev -> back -> x
     // if next == 0
     DUP1,
     ISZERO,
     NOT,
     PUSH2, "IndexOfNotTakenBranch_next",
-    PC,
+    PC, // 71
     ADD,
     JUMPI,
 //73
@@ -600,49 +601,53 @@ var reduce_ = [
 //163
     NOT,
     PUSH2, "IndexOfNotTakenBranch_if1_while",
+    PC, //168
+    ADD,
     JUMPI,
-//168
+//170
     // Stack contains: next -> prev -> back -> x
     // -- back = enter(net, port(addr(prev), exit.pop().unwrap()));
     PUSH2, EXIT_BUFFER_INIT,
     pop, // exit.pop()
-//181
+//183
     DUP3,
     addr, // addr(prev)
-//190
+//192
     port,
     enter,
-//214
+//216
     SWAP3, // back = enter(port(addr(prev), exit.pop()))
     POP,
 
     // -- rewrite(net, addr(prev), addr(next));
     DUP2,
     addr,
-//225
+//227
     DUP2,
     addr,
-//234
-    rewrite, // PC += X
-//234 + X
+//236
+    rewrite, // PC += X = 1554
+//236 + X
     // next = enter(net, back);
     DUP3,
     enter,
     SWAP1,
     POP,
     // Stack contains: next_new -> prev -> back -> x
-//257 + X
-    JUMPDEST, // <---- IndexOfNotTakenBranch_if_while = 258 + X
+//259 + X
+    JUMPDEST, // <---- IndexOfNotTakenBranch_if1_while = 260 + X
     // Stack contains: next -> prev -> back -> x
     // else if slot(next) == 0 {
     DUP1,
     slot,
     ISZERO,
-// 267 + X
+// 269 + X
     NOT,
     PUSH2, "IndexOfNotTakenBranch_if2_while",
+    PC, //274 + X
+    ADD,
     JUMPI,
-// 272+X
+// 276+X
     // Stack contains: next -> prev -> back -> x
     // warp.push(port(addr(next), 2));
     PUSH1, "02",
@@ -651,7 +656,7 @@ var reduce_ = [
     port,
     PUSH2, WARP_BUFFER_INIT,
     push,
-// 300 + X
+// 304 + X
     // next = enter(net, port(addr(next), 1));
     PUSH1, "01",
     SWAP1,
@@ -659,7 +664,7 @@ var reduce_ = [
     port,
     enter,
     // Stack contains: next_new -> prev -> back -> x
-//335+X
+//339+X
     // else {
     JUMPDEST, // <---- IndexOfNotTakenBranch_if2_while = 336+X
     // Stack contains: next -> prev -> back -> x
@@ -668,18 +673,20 @@ var reduce_ = [
     slot,
     PUSH2, EXIT_BUFFER_INIT,
     push,
-//356+X
+//360+X
     // next = enter(net, port(addr(next), 0));
     PUSH1, "00",
     SWAP1,
     addr,
     port,
     enter,
-//391+X
+//395+X
     PUSH2, "IndexOfWhileLoopStart",
+    PC,//399+X
+    SUB,
     JUMP,
-    JUMPDEST, // <---- IndexOfFunctionEnd = 396+X
-
+    JUMPDEST, // <---- IndexOfFunctionEnd = 402+X
+// Stack contains: x
 ];
 
 var jumpToFunctionEnd = reduce_.indexOf("IndexOfFunctionEnd"); //
@@ -690,11 +697,11 @@ var jumpToWhileLoopStart = reduce_.indexOf("IndexOfWhileLoopStart"); //
 
 // TODO find a better way of doing this whithout hardcoding values
 // TODO find the correct values for these variables
-var IndexOfFunctionEnd = "xxxx"
-var IndexOfNotTakenBranch_next = "xxxx";
-var IndexOfNotTakenBranch_if1_while = "xxxx";
-var IndexOfNotTakenBranch_if2_while = "xxxx";
-var IndexOfWhileLoopStart = "xxxx";
+var IndexOfFunctionEnd = "0766";
+var IndexOfNotTakenBranch_next = "0026";
+var IndexOfNotTakenBranch_if1_while = "066E";
+var IndexOfNotTakenBranch_if2_while = "003E";
+var IndexOfWhileLoopStart = "0774";
 
 reduce_[jumpToFunctionEnd] = IndexOfFunctionEnd;
 reduce_[jumpToNotTakenBranchNext] = IndexOfNotTakenBranch_next;
@@ -869,10 +876,11 @@ var rewriteTest = [
     MLOAD,
 
     // Rewrite
+    PC,
     PUSH1, "01", // Node 0
     PUSH1, "02", // Node 1
     rewrite,
-
+    PC,
     // Push nodes contents to stack after rewriting
     PUSH1, "00",
     node,
@@ -899,6 +907,50 @@ var rewriteTest = [
     MLOAD,
 ].join("");
 
+// NOT PASSING
+var reduceTest = [
+    reduce,
+
+    /*PUSH1, "00",
+    node,
+    MLOAD,
+
+    PUSH1, "01",
+    node,
+    MLOAD,
+
+    PUSH1, "02",
+    node,
+    MLOAD,
+
+    PUSH1, "03",
+    node,
+    MLOAD,
+
+    PUSH1, "04",
+    node,
+    MLOAD,
+
+    PUSH1, "05",
+    node,
+    MLOAD,
+
+    PUSH1, "06",
+    node,
+    MLOAD,
+
+    PUSH1, "07",
+    node,
+    MLOAD,
+
+    PUSH1, "08",
+    node,
+    MLOAD,
+
+    PUSH1, "09",
+    node,
+    MLOAD,*/
+].join("");
 ////////////////////// EVM CODE //////////////////////
 var code = [
     // Load SIC graph to memory
@@ -908,20 +960,23 @@ var code = [
     CALLDATACOPY,
 
     // Code
-    rewriteTest,
+    reduceTest,
 
     // Stop
     STOP
 ].join("");
-console.log("CODE: ");
-console.log(code);
-console.log("\n\n")
-console.log("DATA: ");
-console.log(["0000000000000000000000000000000000000000000000000000000000000003", // size
+
+var data = [ "0000000000000000000000000000000000000000000000000000000000000003", // size
              "0000000000000000 0000000000000005 0000000000000006 0000000000000001", // node 0
              "0000000000000008 0000000000000001 0000000000000002 0000000000000003", // node 1
              "0000000000000004 0000000000000009 000000000000000a 0000000000000004", // node 2
-            ].join('').split(' ').join(''));
+         ].join('').split(' ').join('');
+
+console.log(`CODE=${code}`);
+console.log(`\nDATA=${data}`);
+console.log("\nCOMMAND=\"evm --code $CODE --debug --input $DATA --nomemory run\"");
+console.log("\necho $COMMAND\neval $COMMAND 2> output.txt");
+
 /*
 const until = (stop, fn, val) => !stop(val) ? until(stop, fn, fn(val)) : val;
 const lpad = (len, chr, str) => until((s) => s.length === len, (s) => chr + s, str);
