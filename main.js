@@ -21,7 +21,7 @@ const ISZERO        =   "15";
 const AND           =   "16";
 const OR            =   "17";
 const XOR           =   "18";
-const NOT           =   "19";
+//const NOT           =   "19";
 const CALLDATACOPY  =   "37";
 const POP           =   "50";
 const MLOAD         =   "51";
@@ -69,6 +69,7 @@ var vm = new VM();
 
 
 /////////// Functions ///////////
+
 // node(node_id) -- Returns the memory position of a node
 // gas cost = 14
 // PC += 6
@@ -165,12 +166,19 @@ var port_i = [
 // PC += 8
 var addr = [
     // Stack contains port -> x
-    PUSH1, BUFFER_SIZE_POS,
+    /*PUSH1, BUFFER_SIZE_POS,
     SWAP1,
     SUB,
     PUSH1, NODE_SIZE,
     SWAP1,
+    DIV,*/
+    PUSH1, "04",
+    SWAP1,
     DIV,
+    JUMPDEST, // Placeholder
+    JUMPDEST, // Placeholder
+    JUMPDEST, // Placeholder
+    JUMPDEST, // Placeholder
     // Stack contains: addr -> x
 ].join("");
 
@@ -526,9 +534,9 @@ var reduce_ = [
     // Stack contains: x
     PUSH1, "00", // back = 0
     PUSH1, "00", // prev = 0
+//20
     PUSH1, "00", // s = Slot 0
     PUSH1, "00", // n = Node 0
-//20
     port,
     enter, // next = enter(port(n, s));
 //44
@@ -546,7 +554,7 @@ var reduce_ = [
     GT,
 //56
     OR,
-    NOT,
+    ISZERO,
 //58
     PUSH2, "IndexOfFunctionEnd",
     PC, //62
@@ -557,7 +565,7 @@ var reduce_ = [
     // if next == 0
     DUP1,
     ISZERO,
-    NOT,
+    ISZERO,
     PUSH2, "IndexOfNotTakenBranch_next",
     PC, // 71
     ADD,
@@ -594,12 +602,12 @@ var reduce_ = [
     DUP4,
     addr,
     ISZERO,
-    NOT, // addr(prev) != 0
+    ISZERO, // addr(prev) != 0
 //161
     AND,
     AND,
 //163
-    NOT,
+    ISZERO,
     PUSH2, "IndexOfNotTakenBranch_if1_while",
     PC, //168
     ADD,
@@ -642,7 +650,7 @@ var reduce_ = [
     slot,
     ISZERO,
 // 269 + X
-    NOT,
+    ISZERO,
     PUSH2, "IndexOfNotTakenBranch_if2_while",
     PC, //274 + X
     ADD,
@@ -699,7 +707,7 @@ var jumpToWhileLoopStart = reduce_.indexOf("IndexOfWhileLoopStart"); //
 // TODO find the correct values for these variables
 var IndexOfFunctionEnd = "0766";
 var IndexOfNotTakenBranch_next = "0026";
-var IndexOfNotTakenBranch_if1_while = "066E";
+var IndexOfNotTakenBranch_if1_while = "066D";
 var IndexOfNotTakenBranch_if2_while = "003E";
 var IndexOfWhileLoopStart = "0774";
 
@@ -758,11 +766,11 @@ var indexTest = [
 
 //PASSING
 var addrTest = [
-    PUSH1, "27", // Node 0
+    PUSH1, "00", // Node 0
     addr,
-    PUSH1, "37", // Node 0
+    PUSH1, "01", // Node 0
     addr,
-    PUSH1, "3f", // Node 1
+    PUSH1, "04", // Node 1
     addr,
 ].join("");
 
@@ -787,7 +795,7 @@ var enterTest = [
     MLOAD,
 ].join("");
 
-// PASSING
+// DEPRECATED
 var accordanceTest = [
     PUSH1, "00", // node 0
     PUSH1, "00", // slot 0
@@ -876,11 +884,10 @@ var rewriteTest = [
     MLOAD,
 
     // Rewrite
-    PC,
     PUSH1, "01", // Node 0
     PUSH1, "02", // Node 1
     rewrite,
-    PC,
+
     // Push nodes contents to stack after rewriting
     PUSH1, "00",
     node,
@@ -951,7 +958,9 @@ var reduceTest = [
     node,
     MLOAD,*/
 ].join("");
+
 ////////////////////// EVM CODE //////////////////////
+
 var code = [
     // Load SIC graph to memory
     PUSH2, "ffff",
@@ -966,11 +975,30 @@ var code = [
     STOP
 ].join("");
 
-var data = [ "0000000000000000000000000000000000000000000000000000000000000003", // size
-             "0000000000000000 0000000000000005 0000000000000006 0000000000000001", // node 0
-             "0000000000000008 0000000000000001 0000000000000002 0000000000000003", // node 1
-             "0000000000000004 0000000000000009 000000000000000a 0000000000000004", // node 2
-         ].join('').split(' ').join('');
+// data cases:
+// case 1:
+/*
+  ["0000000000000000000000000000000000000000000000000000000000000003", // size
+   "0000000000000005 0000000000000001 0000000000000006 0000000000000001", // node 0
+   "0000000000000008 0000000000000000 0000000000000002 0000000000000003", // node 1
+   "0000000000000004 0000000000000009 000000000000000a 0000000000000004", // node 2
+ ]
+*/
+
+// case 2:
+/*
+[ "0000000000000000000000000000000000000000000000000000000000000003", // size
+  "0000000000000004 0000000000000001 0000000000000005 0000000000000001", // node 0
+  "0000000000000000 0000000000000002 0000000000000008 0000000000000003", // node 1
+  "0000000000000006 0000000000000009 000000000000000a 0000000000000004", // node 2
+]
+*/
+var data =
+[ "0000000000000000000000000000000000000000000000000000000000000003", // size
+  "0000000000000004 0000000000000001 0000000000000005 0000000000000001", // node 0
+  "0000000000000000 0000000000000002 0000000000000008 0000000000000003", // node 1
+  "0000000000000006 0000000000000009 000000000000000a 0000000000000004", // node 2
+].join('').split(' ').join('');
 
 console.log(`CODE=${code}`);
 console.log(`\nDATA=${data}`);
