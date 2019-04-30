@@ -1,85 +1,84 @@
 var net = require('./net.js');
 
-/*////////////////////// TESTS //////////////////////
+////////////////////// TESTS //////////////////////
 // PASSING
 var nodeTest = [
     //should push position of node 0 to stack
-    PUSH1, "00",
-    node,
-    DUP1,
-    MLOAD,
+    net.PUSH1, "00",
+    net.node,
+    net.DUP1,
+    net.MLOAD,
     //should push position of node 1 to stack
-    PUSH1, "01",
-    node,
-    DUP1,
-    MLOAD,
+    net.PUSH1, "01",
+    net.node,
+    net.DUP1,
+    net.MLOAD,
 ].join("");
 
 //PASSING
 var portTest = [
-    PUSH1, "00", // slot 0
-    PUSH1, "00", // node 0
-    port,
-    PUSH1, "03", // slot 3 (kind)
-    PUSH1, "00", // node 0
-    port,
-    PUSH1, "02", // slot 2
-    PUSH1, "01", // node 1
-    port,
+    net.PUSH1, "00", // slot 0
+    net.PUSH1, "00", // node 0
+    net.port,
+    net.PUSH1, "03", // slot 3 (kind)
+    net.PUSH1, "00", // node 0
+    net.port,
+    net.PUSH1, "02", // slot 2
+    net.PUSH1, "01", // node 1
+    net.port,
 ].join("");
 
 //PASSING
 var indexTest = [
-    PUSH1, "00", // slot 0
-    PUSH1, "00", // node 0
-    port,
-    DUP1,
-    index,
-    PUSH1, "00", // slot 0
-    PUSH1, "00", // node 0
-    index_ns,
-    PUSH1, "00", // slot 0
-    PUSH1, "00", // node 0
-    port,
-    index,
-    port_i,
+    net.PUSH1, "00", // slot 0
+    net.PUSH1, "00", // node 0
+    net.port,
+    net.DUP1,
+    net.index,
+    net.PUSH1, "00", // slot 0
+    net.PUSH1, "00", // node 0
+    net.index_ns,
+    net.PUSH1, "00", // slot 0
+    net.PUSH1, "00", // node 0
+    net.port,
+    net.index,
+    net.port_i,
 ].join("");
 
 //PASSING
 var addrTest = [
-    PUSH1, "00", // Node 0
-    addr,
-    PUSH1, "01", // Node 0
-    addr,
-    PUSH1, "04", // Node 1
-    addr,
+    net.PUSH1, "00", // Node 0
+    net.addr,
+    net.PUSH1, "01", // Node 0
+    net.addr,
+    net.PUSH1, "04", // Node 1
+    net.addr,
 ].join("");
 
 //PASSING
 var slotTest = [
-    PUSH1, "27", // Slot 0
-    slot,
-    PUSH1, "3f", // Slot 0
-    slot,
-    PUSH1, "37", // Slot 2
-    slot,
+    net.PUSH1, "27", // Slot 0
+    net.slot,
+    net.PUSH1, "3f", // Slot 0
+    net.slot,
+    net.PUSH1, "37", // Slot 2
+    net.slot,
 ].join("");
 
 //PASSING
 var enterTest = [
-    PUSH1, "00", // node 0
-    PUSH1, "00", // slot 0
-    index_ns, // index 27
-    DUP1,
-    enter,
-    SWAP1,
-    MLOAD,
+    net.PUSH1, "00", // node 0
+    net.PUSH1, "00", // slot 0
+    net.index_ns, // index 27
+    net.DUP1,
+    net.enter,
+    net.SWAP1,
+    net.MLOAD,
 ].join("");
 
 // DEPRECATED
-var accordanceTest = [
+/*var accordanceTest = [
     PUSH1, "00", // node 0
-    PUSH1, "00", // slot 0
     index, // index 27
     PUSH1, "27",
     slot, // slot 0
@@ -89,162 +88,181 @@ var accordanceTest = [
     enter, // value on index 27
     PUSH1, "27",
     MLOAD, // index 27 memory vicinity
-].join("");
+].join("");*/
 
 // PASSING
 var kindTest = [
-    PUSH1, "00",
-    kind,
-    PUSH1, "01",
-    kind,
+    net.PUSH1, "00",
+    net.kind,
+    net.PUSH1, "01",
+    net.kind,
 ].join("");
 
 // PASSING
 var linkTest = [
     // Before linking:
-    PUSH1, "03", // slot 3
-    PUSH1, "00", // node 0
-    index_ns,
-    MLOAD,
-    PUSH1, "03", // slot 3
-    PUSH1, "01", // node 1
-    index_ns,
-    MLOAD,
+    net.PUSH1, "03", // slot 3
+    net.PUSH1, "00", // node 0
+    net.index_ns,
+    net.MLOAD,
+    net.PUSH1, "03", // slot 3
+    net.PUSH1, "01", // node 1
+    net.index_ns,
+    net.MLOAD,
 
     // Link
-    PUSH1, "02", // slot 2
-    PUSH1, "00", // node 0
-    port,
-    PUSH1, "00", // slot 0
-    PUSH1, "01", // node 1
-    port,
-    link,
+    net.PUSH1, "02", // slot 2
+    net.PUSH1, "00", // node 0
+    net.port,
+    net.PUSH1, "00", // slot 0
+    net.PUSH1, "01", // node 1
+    net.port,
+    net.link,
 
     // After linking:
-    PUSH1, "03", // slot 3
-    PUSH1, "00", // node 0
-    index_ns,
-    MLOAD,
-    PUSH1, "03", // slot 3
-    PUSH1, "01", // node 1
-    index_ns,
-    MLOAD,
+    net.PUSH1, "03", // slot 3
+    net.PUSH1, "00", // node 0
+    net.index_ns,
+    net.MLOAD,
+    net.PUSH1, "03", // slot 3
+    net.PUSH1, "01", // node 1
+    net.index_ns,
+    net.MLOAD,
 
 ].join("");
 
 // PASSING
 var newNodeTest = [
-    PUSH1, "ff", // kind = ff
-    new_node, // create new node
+    net.PUSH1, "ff", // kind = ff
+    net.new_node, // create new node
 
     // get new_node_id
-    PUSH1, BUFFER_SIZE_POS,
-    MLOAD,
-    PUSH1, "01",
-    SWAP1,
-    SUB,
-    node,
+    net.PUSH1, net.BUFFER_SIZE_POS,
+    net.MLOAD,
+    net.PUSH1, "01",
+    net.SWAP1,
+    net.SUB,
+    net.node,
 
     // Load new node to stack
-    MLOAD,
+    net.MLOAD,
 ].join("");
 
 // PASSING
 var rewriteTest = [
     // Push nodes contents to stack before rewriting
-    PUSH1, "00",
-    node,
-    MLOAD,
+    net.PUSH1, "00",
+    net.node,
+    net.MLOAD,
 
-    PUSH1, "01",
-    node,
-    MLOAD,
+    net.PUSH1, "01",
+    net.node,
+    net.MLOAD,
 
-    PUSH1, "02",
-    node,
-    MLOAD,
+    net.PUSH1, "02",
+    net.node,
+    net.MLOAD,
 
     // Rewrite
-    PUSH1, "01", // Node 0
-    PUSH1, "02", // Node 1
-    rewrite,
+    net.PUSH1, "01", // Node 0
+    net.PUSH1, "02", // Node 1
+    net.rewrite,
 
     // Push nodes contents to stack after rewriting
-    PUSH1, "00",
-    node,
-    MLOAD,
+    net.PUSH1, "00",
+    net.node,
+    net.MLOAD,
 
-    PUSH1, "01",
-    node,
-    MLOAD,
+    net.PUSH1, "01",
+    net.node,
+    net.MLOAD,
 
-    PUSH1, "02",
-    node,
-    MLOAD,
+    net.PUSH1, "02",
+    net.node,
+    net.MLOAD,
 
-    PUSH1, "03",
-    node,
-    MLOAD,
+    net.PUSH1, "03",
+    net.node,
+    net.MLOAD,
 
-    PUSH1, "04",
-    node,
-    MLOAD,
+    net.PUSH1, "04",
+    net.node,
+    net.MLOAD,
 
     // Push memory size to stack after rewriting
-    PUSH1, BUFFER_SIZE_POS,
-    MLOAD,
+    net.PUSH1, net.BUFFER_SIZE_POS,
+    net.MLOAD,
 ].join("");
-*/
 
 // PASSING
 var pushTest = [
     // init warp buffer
     net.PUSH1, "00",
-    net.PUSH2, net.WARP_BUFFER_INIT,
+    net.PUSH2, net.EXIT_BUFFER_INIT,
     net.MSTORE,
 
-    // Push new value
+    // Push new values
     net.PUSH2, "FEFE",
-    net.PUSH2, net.WARP_BUFFER_INIT,
+    net.PUSH2, net.EXIT_BUFFER_INIT,
+    net.push,
+
+    net.PUSH2, "FDFD",
+    net.PUSH2, net.EXIT_BUFFER_INIT,
+    net.push,
+
+    net.PUSH2, "FCFC",
+    net.PUSH2, net.EXIT_BUFFER_INIT,
     net.push,
 
     // Check included value
-    net.PUSH2, net.WARP_BUFFER_INIT,
+    net.PUSH2, net.EXIT_BUFFER_INIT,
     net.DUP1,
     net.MLOAD,
     net.SWAP1,
     net.PUSH1, net.SLOT_SIZE,
+    net.PUSH1, "03",
+    net.MUL,
     net.ADD,
     net.MLOAD,
 ].join("");
 
 
-// NOT PASSING
+// PASSING
 var popTest = [
     // init warp buffer
     net.PUSH1, "00",
-    net.PUSH2, net.WARP_BUFFER_INIT,
+    net.PUSH2, net.EXIT_BUFFER_INIT,
     net.MSTORE,
 
     // Push new values
     net.PUSH2, "FEFE",
-    net.PUSH2, net.WARP_BUFFER_INIT,
+    net.PUSH2, net.EXIT_BUFFER_INIT,
     net.push,
 
     net.PUSH2, "FDFD",
-    net.PUSH2, net.WARP_BUFFER_INIT,
+    net.PUSH2, net.EXIT_BUFFER_INIT,
+    net.push,
+
+    net.PUSH2, "FCFC",
+    net.PUSH2, net.EXIT_BUFFER_INIT,
     net.push,
 
     // Pop value we just inserted
-    net.PUSH2, net.WARP_BUFFER_INIT,
+    net.PUSH2, net.EXIT_BUFFER_INIT,
+    net.MLOAD,
+    net.PUSH2, net.EXIT_BUFFER_INIT,
     net.pop,
-    net.PUSH2, net.WARP_BUFFER_INIT,
+    net.PUSH2, net.EXIT_BUFFER_INIT,
+    net.pop,
+    net.PUSH2, net.EXIT_BUFFER_INIT,
+    net.pop,
+    net.PUSH2, net.EXIT_BUFFER_INIT,
     net.MLOAD,
 ].join("");
-/*
+
 // NOT PASSING
 var reduceTest = [
-    reduce,
+    net.reduce,
 
     /*PUSH1, "00",
     node,
@@ -285,7 +303,7 @@ var reduceTest = [
     PUSH1, "09",
     node,
     MLOAD,*/
-//].join("");
+].join("");
 
 // Test data cases
 var case1 =
@@ -317,7 +335,7 @@ module.exports = {
     case3:case3,
 
     // Test Functions
-    /*nodeTest:nodeTest,
+    nodeTest:nodeTest,
     portTest:portTest,
     indexTest:indexTest,
     addrTest:addrTest,
@@ -329,7 +347,5 @@ module.exports = {
     rewriteTest:rewriteTest,
     pushTest:pushTest,
     popTest:popTest,
-    reduceTest:reduceTest,*/
-    pushTest:pushTest,
-    popTest:popTest,
+    reduceTest:reduceTest,
 };
