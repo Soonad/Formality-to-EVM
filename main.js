@@ -28,7 +28,7 @@ var code = [
     net.CALLDATACOPY,
 
     // Code
-    tests.popTest,
+    tests.reduceTest,
 
     // Stop
     net.STOP

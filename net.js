@@ -535,7 +535,7 @@ var reduce_ = [
     port,
     enter, // next = enter(port(n, s));
  //44
-    JUMPDEST, // <----- IndexOfWhileLoopStart = 0x2D = 45
+    JUMPDEST, // <----- IndexOfWhileLoopStart, PC = 0x2D = 45
     // Stack contains: next -> prev -> back -> x
     // -- Comparison (next > 0)
     PUSH1, "00",
@@ -573,9 +573,9 @@ var reduce_ = [
     enter, // Stack contains: next_new -> next_old -> prev -> back -> x
     SWAP1,
     POP,   // // Stack contains: next_new -> prev -> back -> x
- //108
+ //121
     // else, do nothing
-    JUMPDEST, // <--- IndexOfNotTakenBranch_next = 0x6D = 109
+    JUMPDEST, // <--- IndexOfNotTakenBranch_next, PC = 0x6D = 122
 
     // prev = enter(net, next);
     // Stack contains: next -> prev -> back -> x
@@ -583,74 +583,74 @@ var reduce_ = [
     enter,
     SWAP2,
     POP,
- //132
+ //145
     // Stack contains: next -> prev -> back -> x
     // if slot(next) == 0 && slot(prev) == 0 && addr(prev) != 0 {
     DUP2,
     slot,
     ISZERO, // slot(prev) == 0
- //141
+ //154
     DUP2,
     slot,
     ISZERO, // slot(next) == 0
- //150
+ //163
     DUP4,
     addr,
     ISZERO,
     ISZERO, // addr(prev) != 0
- //161
+ //174
     AND,
     AND,
- //163
+ //176
     ISZERO,
     PUSH2, "IndexOfNotTakenBranch_if1_while",
-    PC, //168
+    PC, //181
     ADD,
     JUMPI,
- //170
+ //183
     // Stack contains: next -> prev -> back -> x
     // -- back = enter(net, port(addr(prev), exit.pop().unwrap()));
     PUSH2, EXIT_BUFFER_INIT,
     pop, // exit.pop()
- //183
+ //209
     DUP3,
     addr, // addr(prev)
- //192
+ //218
     port,
     enter,
- //216
+ //242
     SWAP3, // back = enter(port(addr(prev), exit.pop()))
     POP,
 
     // -- rewrite(net, addr(prev), addr(next));
     DUP2,
     addr,
- //227
+ //253
     DUP2,
     addr,
- //236
+ //262
     rewrite, // PC += X = 1554
- //236 + X
+ //262 + X
     // next = enter(net, back);
     DUP3,
     enter,
     SWAP1,
     POP,
     // Stack contains: next_new -> prev -> back -> x
- //259 + X
-    JUMPDEST, // <---- IndexOfNotTakenBranch_if1_while = 260 + X
+ //285 + X
+    JUMPDEST, // <---- IndexOfNotTakenBranch_if1_while, PC = 286 + X
     // Stack contains: next -> prev -> back -> x
     // else if slot(next) == 0 {
     DUP1,
     slot,
     ISZERO,
- // 269 + X
+ // 295 + X
     ISZERO,
     PUSH2, "IndexOfNotTakenBranch_if2_while",
-    PC, //274 + X
+    PC, //300 + X
     ADD,
     JUMPI,
- // 276+X
+ // 302+X
     // Stack contains: next -> prev -> back -> x
     // warp.push(port(addr(next), 2));
     PUSH1, "02",
@@ -659,7 +659,7 @@ var reduce_ = [
     port,
     PUSH2, WARP_BUFFER_INIT,
     push,
- // 304 + X
+ // 372 + X
     // next = enter(net, port(addr(next), 1));
     PUSH1, "01",
     SWAP1,
@@ -667,29 +667,29 @@ var reduce_ = [
     port,
     enter,
     // Stack contains: next_new -> prev -> back -> x
- //339+X
+ //407+X
     // else {
-    JUMPDEST, // <---- IndexOfNotTakenBranch_if2_while = 336+X
+    JUMPDEST, // <---- IndexOfNotTakenBranch_if2_while, PC = 408+X
     // Stack contains: next -> prev -> back -> x
     //  exit.push(slot(next));
     DUP1,
     slot,
     PUSH2, EXIT_BUFFER_INIT,
     push,
- //360+X
+ //471+X
     // next = enter(net, port(addr(next), 0));
     PUSH1, "00",
     SWAP1,
     addr,
     port,
     enter,
- //395+X
+ //506+X
     PUSH2, "IndexOfWhileLoopStart",
-    PC,//399+X
+    PC,//510+X
     SUB,
     JUMP,
 
-    JUMPDEST, // <---- IndexOfFunctionEnd = 402+X
+    JUMPDEST, // <---- IndexOfFunctionEnd, PC = 513+X
     POP,
     POP,
     POP,
@@ -704,11 +704,11 @@ var jumpToWhileLoopStart = reduce_.indexOf("IndexOfWhileLoopStart"); //
 
 // TODO find a better way of doing this whithout hardcoding values
 // TODO find the correct values for these variables
-var IndexOfFunctionEnd = "0766";
-var IndexOfNotTakenBranch_next = "0027";//"0026";
-var IndexOfNotTakenBranch_if1_while = "066D";
-var IndexOfNotTakenBranch_if2_while = "0042";
-var IndexOfWhileLoopStart = "0774";
+var IndexOfFunctionEnd = "07D5";
+var IndexOfNotTakenBranch_next = "0033";
+var IndexOfNotTakenBranch_if1_while = "067A";
+var IndexOfNotTakenBranch_if2_while = "006C";
+var IndexOfWhileLoopStart = "07E2";
 
 reduce_[jumpToFunctionEnd] = IndexOfFunctionEnd;
 reduce_[jumpToNotTakenBranchNext] = IndexOfNotTakenBranch_next;
