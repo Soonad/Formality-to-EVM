@@ -57,11 +57,21 @@ var addrTest = [
 
 //PASSING
 var slotTest = [
-    net.PUSH1, "27", // Slot 0
+    net.PUSH1, "01", // Slot 1
+    net.PUSH1, "00", // Node 0
+    net.port,
     net.slot,
-    net.PUSH1, "3f", // Slot 0
+    net.PUSH1, "02", // Slot 2
+    net.PUSH1, "01", // Node 1
+    net.port,
     net.slot,
-    net.PUSH1, "37", // Slot 2
+    net.PUSH1, "00", // Slot 0
+    net.PUSH1, "02", // Node 2
+    net.port,
+    net.slot,
+    net.PUSH1, "03", // Slot 3 (kind)
+    net.PUSH1, "02", // Node 2
+    net.port,
     net.slot,
 ].join("");
 
@@ -69,11 +79,9 @@ var slotTest = [
 var enterTest = [
     net.PUSH1, "00", // node 0
     net.PUSH1, "00", // slot 0
-    net.index_ns, // index 27
+    net.port,
     net.DUP1,
     net.enter,
-    net.SWAP1,
-    net.MLOAD,
 ].join("");
 
 // DEPRECATED
@@ -327,12 +335,18 @@ var case3 =
   "0000000000000006 0000000000000009 000000000000000a 0000000000000004", // node 2
 ].join('').split(' ').join('');
 
+var case4 =
+[ "0000000000000000000000000000000000000000000000000000000000000002", // size
+  "0000000000000004 0000000000000001 0000000000000005 0000000000000001", // node 0
+  "0000000000000000 0000000000000002 0000000000000006 0000000000000001", // node 1
+].join('').split(' ').join('');
 
 module.exports = {
     // Test Cases
     case1:case1,
     case2:case2,
     case3:case3,
+    case4:case4,
 
     // Test Functions
     nodeTest:nodeTest,

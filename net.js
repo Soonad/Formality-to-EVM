@@ -9,11 +9,11 @@ const GT            =   "11";
 const SLT            =   "12";
 const SGT            =   "13";
 const EQ            =   "14";
-const ISZERO        =   "15";
+const ISZERO        =   "15"; // Can also work as a logical NOT
 const AND           =   "16";
 const OR            =   "17";
 const XOR           =   "18";
-//const NOT           =   "19";
+//const NOT           =   "19"; // Bitwise NOT
 const CALLDATACOPY  =   "37";
 const POP           =   "50";
 const MLOAD         =   "51";
@@ -41,8 +41,8 @@ const SWAP3         =   "92";
 const SWAP4         =   "93";
 
 /////////// Important Memory Addresses ///////////
-const EXIT_BUFFER_INIT  = "3e00";
-const WARP_BUFFER_INIT  = "1f00";
+const EXIT_BUFFER_INIT  = "7c00";
+const WARP_BUFFER_INIT  = "3e00";//"1f00";
 const BUFFER_SIZE_POS   = "1f"; // TODO: Prepare code for receiving 2 bytes instead of 1 with BUFFER_SIZE_POS
 
 /////////// Important constants ///////////
@@ -154,6 +154,8 @@ const addr = [
     PUSH1, "04",
     SWAP1,
     DIV,
+    // TODO: Remove placeholders. They were put here only to avoid
+    // changing the JUMP's adresses
     JUMPDEST, // Placeholder
     JUMPDEST, // Placeholder
     JUMPDEST, // Placeholder
@@ -166,11 +168,18 @@ const addr = [
 // PC += 7
 const slot = [
     // Stack contains port -> x
-    PUSH1, SLOT_SIZE,
+    /*PUSH1, SLOT_SIZE,
     SWAP1,
-    DIV,
+    DIV,*/
     PUSH1, "03", // we just want the last 2 bits
     AND,
+    // TODO: Remove placeholders. They were put here only to avoid
+    // changing the JUMP's adresses
+    JUMPDEST, // Placeholder
+    JUMPDEST, // Placeholder
+    JUMPDEST, // Placeholder
+    JUMPDEST, // Placeholder
+    // Stack contains: slot -> x
 ].join("");
 
 // enter_i(index) -- returns the value stored in a port index
@@ -536,17 +545,18 @@ var reduce_ = [
     enter, // next = enter(port(n, s));
  //44
     JUMPDEST, // <----- IndexOfWhileLoopStart, PC = 0x2D = 45
+    // while next > 0 || warp.len > 0
     // Stack contains: next -> prev -> back -> x
     // -- Comparison (next > 0)
     PUSH1, "00",
     DUP2,
-    SGT,
+    GT,
 
     // -- Comparison warp.len() > 0
+    PUSH1, "00",
     PUSH2, WARP_BUFFER_INIT,
     MLOAD,
-    PUSH1, "00",
-    SGT,
+    GT,
  //56
     OR,
     ISZERO,
@@ -554,19 +564,19 @@ var reduce_ = [
     PUSH2, "IndexOfFunctionEnd",
     PC, //62
     ADD,
-    JUMPI, // while next > 0 || warp.len > 0
+    JUMPI, // while check
  //64
     // Stack contains: next -> prev -> back -> x
     // if next == 0
     DUP1,
-    ISZERO,
-    ISZERO,
+    ISZERO, // TODO: Remove both ISZERO's from here as they
+    ISZERO, // work as 2 consecutive logical NOT's
     PUSH2, "IndexOfNotTakenBranch_next",
     PC, // 71
     ADD,
     JUMPI,
  //73
-    // next = enter(net, warp.pop().unwrap())
+    // next = enter(warp.pop())
     // Stack contains: next -> prev -> back -> x
     PUSH2, WARP_BUFFER_INIT,
     pop,
@@ -577,7 +587,7 @@ var reduce_ = [
     // else, do nothing
     JUMPDEST, // <--- IndexOfNotTakenBranch_next, PC = 0x6D = 122
 
-    // prev = enter(net, next);
+    // prev = enter(next);
     // Stack contains: next -> prev -> back -> x
     DUP1,
     enter,
@@ -595,9 +605,9 @@ var reduce_ = [
     ISZERO, // slot(next) == 0
  //163
     DUP4,
-    addr,
-    ISZERO,
-    ISZERO, // addr(prev) != 0
+    addr, // addr(prev) != 0
+    ISZERO, // TODO: Remove these 2 consecutive ISZERO's as they are equivalent
+    ISZERO, // to negating the same expression twice.
  //174
     AND,
     AND,
@@ -609,7 +619,7 @@ var reduce_ = [
     JUMPI,
  //183
     // Stack contains: next -> prev -> back -> x
-    // -- back = enter(net, port(addr(prev), exit.pop().unwrap()));
+    // -- back = enter(port(addr(prev), exit.pop()));
     PUSH2, EXIT_BUFFER_INIT,
     pop, // exit.pop()
  //209
@@ -622,28 +632,29 @@ var reduce_ = [
     SWAP3, // back = enter(port(addr(prev), exit.pop()))
     POP,
 
-    // -- rewrite(net, addr(prev), addr(next));
-    DUP2,
-    addr,
+    // -- rewrite(addr(prev), addr(next));
+    DUP1,
+    addr, // addr(next)
  //253
-    DUP2,
-    addr,
+    DUP3,
+    addr, //addr(prev)
  //262
     rewrite, // PC += X = 1554
  //262 + X
-    // next = enter(net, back);
+    // Stack contains: next -> prev -> back -> x
+    // next = enter(back);
     DUP3,
     enter,
     SWAP1,
     POP,
-    // Stack contains: next_new -> prev -> back -> x
+    // Stack contains: next=enter(back) -> prev -> back -> x
  //285 + X
     JUMPDEST, // <---- IndexOfNotTakenBranch_if1_while, PC = 286 + X
     // Stack contains: next -> prev -> back -> x
     // else if slot(next) == 0 {
     DUP1,
     slot,
-    ISZERO,
+    ISZERO, // TODO: Remove both ISZERO's as the work as 2 consecutive logical NOT's
  // 295 + X
     ISZERO,
     PUSH2, "IndexOfNotTakenBranch_if2_while",
@@ -660,7 +671,7 @@ var reduce_ = [
     PUSH2, WARP_BUFFER_INIT,
     push,
  // 372 + X
-    // next = enter(net, port(addr(next), 1));
+    // next = enter(port(addr(next), 1));
     PUSH1, "01",
     SWAP1,
     addr,
@@ -677,7 +688,7 @@ var reduce_ = [
     PUSH2, EXIT_BUFFER_INIT,
     push,
  //471+X
-    // next = enter(net, port(addr(next), 0));
+    // next = enter(port(addr(next), 0));
     PUSH1, "00",
     SWAP1,
     addr,
@@ -704,7 +715,7 @@ var jumpToWhileLoopStart = reduce_.indexOf("IndexOfWhileLoopStart"); //
 
 // TODO find a better way of doing this whithout hardcoding values
 // TODO find the correct values for these variables
-var IndexOfFunctionEnd = "07D5";
+var IndexOfFunctionEnd = "07D4";
 var IndexOfNotTakenBranch_next = "0033";
 var IndexOfNotTakenBranch_if1_while = "067A";
 var IndexOfNotTakenBranch_if2_while = "006C";
