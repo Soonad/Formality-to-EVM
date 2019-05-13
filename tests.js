@@ -13,6 +13,11 @@ var nodeTest = [
     net.node,
     net.DUP1,
     net.MLOAD,
+    //should push position of node 2 to stack
+    net.PUSH1, "02",
+    net.node,
+    net.DUP1,
+    net.MLOAD,
 ].join("");
 
 //PASSING
@@ -26,19 +31,22 @@ var portTest = [
     net.PUSH1, "02", // slot 2
     net.PUSH1, "01", // node 1
     net.port,
+    net.PUSH1, "02", // slot 2
+    net.PUSH1, "02", // node 2
+    net.port,
 ].join("");
 
 //PASSING
 var indexTest = [
-    net.PUSH1, "00", // slot 0
+    net.PUSH1, "03", // slot 0
     net.PUSH1, "00", // node 0
     net.port,
     net.DUP1,
     net.index,
-    net.PUSH1, "00", // slot 0
+    net.PUSH1, "03", // slot 0
     net.PUSH1, "00", // node 0
     net.index_ns,
-    net.PUSH1, "00", // slot 0
+    net.PUSH1, "03", // slot 0
     net.PUSH1, "00", // node 0
     net.port,
     net.index,
@@ -172,8 +180,8 @@ var rewriteTest = [
     net.MLOAD,
 
     // Rewrite
-    net.PUSH1, "01", // Node 0
-    net.PUSH1, "02", // Node 1
+    net.PUSH1, "01", // Node 1
+    net.PUSH1, "02", // Node 2
     net.rewrite,
 
     // Push nodes contents to stack after rewriting
@@ -194,6 +202,10 @@ var rewriteTest = [
     net.MLOAD,
 
     net.PUSH1, "04",
+    net.node,
+    net.MLOAD,
+
+    net.PUSH1, "05",
     net.node,
     net.MLOAD,
 
@@ -247,23 +259,38 @@ var popTest = [
     net.PUSH2, net.EXIT_BUFFER_INIT,
     net.push,
 
+    net.PUSH2, net.EXIT_BUFFER_INIT,
+    net.MLOAD,
+
     net.PUSH2, "FDFD",
     net.PUSH2, net.EXIT_BUFFER_INIT,
     net.push,
+
+    net.PUSH2, net.EXIT_BUFFER_INIT,
+    net.MLOAD,
+
+    net.PUSH2, net.EXIT_BUFFER_INIT,
+    net.pop,
+
+    net.PUSH2, net.EXIT_BUFFER_INIT,
+    net.MLOAD,
 
     net.PUSH2, "FCFC",
     net.PUSH2, net.EXIT_BUFFER_INIT,
     net.push,
 
-    // Pop value we just inserted
     net.PUSH2, net.EXIT_BUFFER_INIT,
     net.MLOAD,
+
     net.PUSH2, net.EXIT_BUFFER_INIT,
     net.pop,
+
+    net.PUSH2, net.EXIT_BUFFER_INIT,
+    net.MLOAD,
+
     net.PUSH2, net.EXIT_BUFFER_INIT,
     net.pop,
-    net.PUSH2, net.EXIT_BUFFER_INIT,
-    net.pop,
+
     net.PUSH2, net.EXIT_BUFFER_INIT,
     net.MLOAD,
 ].join("");
@@ -313,19 +340,24 @@ var reduceTest = [
     MLOAD,*/
 ].join("");
 
+
+var sizeCalc = [
+
+].join("");
+
 // Test data cases
 var case1 =
 ["0000000000000000000000000000000000000000000000000000000000000003", // size
- "0000000000000009 0000000000000001 0000000000000005 0000000000000001", // node 0
- "000000000000000a 0000000000000002 0000000000000008 0000000000000002", // node 1
- "0000000000000006 0000000000000000 0000000000000004 0000000000000002", // node 2
+ "0000000000000005 0000000000000001 0000000000000006 0000000000000001", // node 0
+ "0000000000000008 0000000000000000 0000000000000002 0000000000000002", // node 1
+ "0000000000000004 0000000000000009 000000000000000a 0000000000000003", // node 2
 ].join('').split(' ').join('');
 
 var case2 =
 ["0000000000000000000000000000000000000000000000000000000000000003", // size
  "0000000000000005 0000000000000001 0000000000000006 0000000000000001", // node 0
- "0000000000000008 0000000000000000 0000000000000002 0000000000000003", // node 1
- "0000000000000004 0000000000000009 000000000000000a 0000000000000004", // node 2
+ "0000000000000008 0000000000000000 0000000000000002 0000000000000002", // node 1
+ "0000000000000004 0000000000000009 000000000000000a 0000000000000003", // node 2
 ].join('').split(' ').join('');
 
 var case3 =
