@@ -55,7 +55,7 @@ const FIRST_NODE_POS = (parseInt(BUFFER_SIZE_POS, 16) + parseInt(NODE_SIZE, 16))
 
 /////////// Functions ///////////
 
-// node(node_id) -- Returns the memory position of a node
+// node(node_id) -> node_index -- Returns the memory position of a node
 // gas cost = 14
 // PC += 6
 const node = [
@@ -65,11 +65,11 @@ const node = [
     MUL,
     PUSH1, FIRST_NODE_POS,
     ADD,
-    // Stack contains: node_pos -> x
+    // Stack contains: node_index -> x
 ].join("");
 
-// port(node, slot) -- Return a port given a memory index
-// A port can be understood as a (node, slot) tuple. A port is calculated by
+// port(node, slot) -- Return a port given a node-slot pair
+// A port can be understood as a (node, slot) tuple. It is calculated by
 // abstracting how the network is stored in memory from a format:
 // RMem: [NODE0, NODE1, NODE2, ...] where each node has 256 bits and
 // VMem: [[SLOT0_0, SLOT1_0, SLOT2_0, KIND0], [SLOT0_1, SLOT1_1, SLOT2_1, KIND1], ...]
@@ -464,13 +464,22 @@ rewrite_[jumpToFunctionEnd] = functionEnd;
 
 const rewrite = rewrite_.join("");
 
+// len(buffer_init) -- Returns buffer len
+// PC += 11
+const len = [
+    // Stack contains BUFFER_INIT -> x
+    MLOAD,
+    PUSH8, "ffffffffffffffff",
+    AND,
+].join("");
+
 // push(buffer_init, value) -- Pushes a value to the end of a buffer
-// PC += 52
+// PC += 62
 const push = [
     // Stack contains BUFFER_INIT -> VALUE -> x
-    // Get buffer size
+    // Get buffer len
     DUP1,
-    MLOAD,
+    len,
 
     // Stack contains BUFFER_LEN -> BUFFER_INIT -> VALUE -> x
     // Update buffer len
@@ -499,11 +508,11 @@ const push = [
 ].join("");
 
 // pop(buffer_init) -- Removes value from the end of a buffer and pushes it to stack
-// PC += 23
+// PC += 33
 const pop = [
     // Stack contains BUFFER_INIT -> x
     DUP1,
-    MLOAD,
+    len,
 
     // Subtract 1 from buffer len and update value in memory
     // Stack contains BUFFER_LEN -> BUFFER_INIT -> x
@@ -583,9 +592,9 @@ var reduce_ = [
     enter, // Stack contains: next_new -> next_old -> prev -> back -> x
     SWAP1,
     POP,   // // Stack contains: next_new -> prev -> back -> x
- //121
+ //131
     // else, do nothing
-    JUMPDEST, // <--- IndexOfNotTakenBranch_next, PC = 0x6D = 122
+    JUMPDEST, // <--- IndexOfNotTakenBranch_next, PC = 0x6D = 132
 
     // prev = enter(next);
     // Stack contains: next -> prev -> back -> x
@@ -593,54 +602,54 @@ var reduce_ = [
     enter,
     SWAP2,
     POP,
- //145
+ //155
     // Stack contains: next -> prev -> back -> x
     // if slot(next) == 0 && slot(prev) == 0 && addr(prev) != 0 {
     DUP2,
     slot,
     ISZERO, // slot(prev) == 0
- //154
+ //164
     DUP2,
     slot,
     ISZERO, // slot(next) == 0
- //163
+ //173
     DUP4,
     addr, // addr(prev) != 0
     ISZERO, // TODO: Remove these 2 consecutive ISZERO's as they are equivalent
     ISZERO, // to negating the same expression twice.
- //174
+ //184
     AND,
     AND,
- //176
+ //186
     ISZERO,
     PUSH2, "IndexOfNotTakenBranch_if1_while",
-    PC, //181
+    PC, //191
     ADD,
     JUMPI,
- //183
+ //193
     // Stack contains: next -> prev -> back -> x
     // -- back = enter(port(addr(prev), exit.pop()));
     PUSH2, EXIT_BUFFER_INIT,
     pop, // exit.pop()
- //209
+ //229
     DUP3,
     addr, // addr(prev)
- //218
+ //238
     port,
     enter,
- //242
+ //262
     SWAP3, // back = enter(port(addr(prev), exit.pop()))
     POP,
 
     // -- rewrite(addr(prev), addr(next));
     DUP1,
     addr, // addr(next)
- //253
+ //273
     DUP3,
     addr, //addr(prev)
- //262
+ //292
     rewrite, // PC += X = 1554
- //262 + X
+ //292 + X
     // Stack contains: next -> prev -> back -> x
     // next = enter(back);
     DUP3,
@@ -648,20 +657,20 @@ var reduce_ = [
     SWAP1,
     POP,
     // Stack contains: next=enter(back) -> prev -> back -> x
- //285 + X
-    JUMPDEST, // <---- IndexOfNotTakenBranch_if1_while, PC = 286 + X
+ //305 + X
+    JUMPDEST, // <---- IndexOfNotTakenBranch_if1_while, PC = 306 + X
     // Stack contains: next -> prev -> back -> x
     // else if slot(next) == 0 {
     DUP1,
     slot,
     ISZERO, // TODO: Remove both ISZERO's as the work as 2 consecutive logical NOT's
- // 295 + X
+ // 315 + X
     ISZERO,
     PUSH2, "IndexOfNotTakenBranch_if2_while",
-    PC, //300 + X
+    PC, //320 + X
     ADD,
     JUMPI,
- // 302+X
+ // 322+X
     // Stack contains: next -> prev -> back -> x
     // warp.push(port(addr(next), 2));
     PUSH1, "02",
@@ -670,7 +679,7 @@ var reduce_ = [
     port,
     PUSH2, WARP_BUFFER_INIT,
     push,
- // 372 + X
+ // 402 + X
     // next = enter(port(addr(next), 1));
     PUSH1, "01",
     SWAP1,
@@ -678,29 +687,29 @@ var reduce_ = [
     port,
     enter,
     // Stack contains: next_new -> prev -> back -> x
- //407+X
+ //437+X
     // else {
-    JUMPDEST, // <---- IndexOfNotTakenBranch_if2_while, PC = 408+X
+    JUMPDEST, // <---- IndexOfNotTakenBranch_if2_while, PC = 438+X
     // Stack contains: next -> prev -> back -> x
     //  exit.push(slot(next));
     DUP1,
     slot,
     PUSH2, EXIT_BUFFER_INIT,
     push,
- //471+X
+ //511+X
     // next = enter(port(addr(next), 0));
     PUSH1, "00",
     SWAP1,
     addr,
     port,
     enter,
- //506+X
+ //546+X
     PUSH2, "IndexOfWhileLoopStart",
-    PC,//510+X
+    PC,//550+X
     SUB,
     JUMP,
 
-    JUMPDEST, // <---- IndexOfFunctionEnd, PC = 513+X
+    JUMPDEST, // <---- IndexOfFunctionEnd, PC = 553+X
     POP,
     POP,
     POP,
@@ -715,11 +724,11 @@ var jumpToWhileLoopStart = reduce_.indexOf("IndexOfWhileLoopStart"); //
 
 // TODO find a better way of doing this whithout hardcoding values
 // TODO find the correct values for these variables
-var IndexOfFunctionEnd = "07D4";
-var IndexOfNotTakenBranch_next = "0033";
-var IndexOfNotTakenBranch_if1_while = "067A";
-var IndexOfNotTakenBranch_if2_while = "006C";
-var IndexOfWhileLoopStart = "07E2";
+var IndexOfFunctionEnd = "07FC"; // "07D4";
+var IndexOfNotTakenBranch_next = "003D";//"0033";
+var IndexOfNotTakenBranch_if1_while = "0684"//"067A";
+var IndexOfNotTakenBranch_if2_while = "0076";//"006C";
+var IndexOfWhileLoopStart = "080a";//"07E2";
 
 reduce_[jumpToFunctionEnd] = IndexOfFunctionEnd;
 reduce_[jumpToNotTakenBranchNext] = IndexOfNotTakenBranch_next;
@@ -728,6 +737,8 @@ reduce_[jumpToNotTakenBranchIf2While] = IndexOfNotTakenBranch_if2_while;
 reduce_[jumpToWhileLoopStart] = IndexOfWhileLoopStart;
 
 const reduce = reduce_.join("");
+
+
 
 module.exports = {
     // OPCODES
