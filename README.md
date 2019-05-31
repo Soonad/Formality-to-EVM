@@ -6,7 +6,7 @@ Evaluates a Nasic graph inside the Ethereum Virtual Machine.
 
 ## How to run the code in your environment (testing only)
 
-### Unix-based OS
+#### Unix-based OS
 1. Clone this repository in your machine
 2. Make sure you have go-ethereum and nodejs installed
 3. Modify the _code_ variable inside _main.js_ to write the code to be run. The file _tests.js_ includes examples of codes and inputs to be used in the interpreter. You can use them to have an idea of how the codes should be run.
