@@ -6,8 +6,8 @@ const SUB           =   "03";
 const DIV           =   "04";
 const LT            =   "10";
 const GT            =   "11";
-const SLT            =   "12";
-const SGT            =   "13";
+const SLT           =   "12";
+const SGT           =   "13";
 const EQ            =   "14";
 const ISZERO        =   "15"; // Can also work as a logical NOT
 const AND           =   "16";
@@ -41,9 +41,11 @@ const SWAP3         =   "92";
 const SWAP4         =   "93";
 
 /////////// Important Memory Addresses ///////////
-const EXIT_BUFFER_INIT  = "7c00";
-const WARP_BUFFER_INIT  = "3e00";//"1f00";
-const BUFFER_SIZE_POS   = "1f"; // TODO: Prepare code for receiving 2 bytes instead of 1 with BUFFER_SIZE_POS
+const EXIT_BUFFER_INIT  = "8000";
+const WARP_BUFFER_INIT  = "4000";
+const BUFFER_SIZE_POS   = "80"; // TODO: Prepare code for receiving 2 bytes instead of 1 with BUFFER_SIZE_POS
+const LOOP_COUNT = "00";
+const REWRITE_COUNT = "40";
 
 /////////// Important constants ///////////
 const SLOT_SIZE = "08"; // Hex size, in bytes, of a slot.
@@ -308,10 +310,26 @@ const link = [
     // Now stack is: x
 ].join("");
 
+// inc(target_index) -- increase memory index's value by 1
+// PC += 7
+const inc = [
+    // Stack contains: target_index -> x
+    DUP1,
+    MLOAD,
+    PUSH1, "01",
+    ADD,
+    SWAP1,
+    MSTORE,
+].join("");
+
 // rewrite(nodeX, nodeY) -- Rewrites an active pair
 // gas cost: kind(x) == kind(y) ? (true = 125 + 24*) : (false = 683 + 108*)
-// PC += 1554
+// PC += 1563
 var rewrite_ = [
+    // Update statistics
+    PUSH1, REWRITE_COUNT,
+    inc,
+
     // Stack contains nodeX -> nodeY -> x
     // -- Compare the kind of both nodes
     // PC = X
@@ -325,7 +343,7 @@ var rewrite_ = [
     PC, // PC = X + 27
     ADD,
     JUMPI, // jump to the other branch
-    // -- else, continue...
+    // -- else, kinds are different. Continue...
     // Stack contains: nodeX -> nodeY -> x
     PUSH1, BUFFER_SIZE_POS, // put future newNodeA_id in stack
     MLOAD,
@@ -522,7 +540,7 @@ const pop = [
     DUP3,
     MSTORE,
 
-    // Push desired value to stack
+    // Push last value to stack
     // Stack contains BUFFER_LEN -> BUFFER_INIT -> x
     PUSH1, SLOT_SIZE,
     MUL,
@@ -555,6 +573,7 @@ var reduce_ = [
  //44
     JUMPDEST, // <----- IndexOfWhileLoopStart, PC = 0x2D = 45
     // while next > 0 || warp.len > 0
+
     // Stack contains: next -> prev -> back -> x
     // -- Comparison (next > 0)
     PUSH1, "00",
@@ -576,6 +595,11 @@ var reduce_ = [
     JUMPI, // while check
  //64
     // Stack contains: next -> prev -> back -> x
+
+    // Update statistics
+    PUSH1, LOOP_COUNT,
+    inc,
+
     // if next == 0
     DUP1,
     ISZERO, // TODO: Remove both ISZERO's from here as they
@@ -647,9 +671,9 @@ var reduce_ = [
  //273
     DUP3,
     addr, //addr(prev)
- //292
-    rewrite, // PC += X = 1554
- //292 + X
+ //282
+    rewrite, // PC += X = 1563
+ //282 + X
     // Stack contains: next -> prev -> back -> x
     // next = enter(back);
     DUP3,
@@ -657,20 +681,25 @@ var reduce_ = [
     SWAP1,
     POP,
     // Stack contains: next=enter(back) -> prev -> back -> x
- //305 + X
-    JUMPDEST, // <---- IndexOfNotTakenBranch_if1_while, PC = 306 + X
+    // Jump to loop begin
+    PUSH2, "IndexOfWhileLoopBegin_if1_while",
+    PC, // PC = 309+X
+    SUB,
+    JUMP,
+ //311 + X
+    JUMPDEST, // <---- IndexOfNotTakenBranch_if1_while, PC = 312 + X
     // Stack contains: next -> prev -> back -> x
     // else if slot(next) == 0 {
     DUP1,
     slot,
     ISZERO, // TODO: Remove both ISZERO's as the work as 2 consecutive logical NOT's
- // 315 + X
+ // 321 + X
     ISZERO,
     PUSH2, "IndexOfNotTakenBranch_if2_while",
-    PC, //320 + X
+    PC, //326 + X
     ADD,
     JUMPI,
- // 322+X
+ // 328+X
     // Stack contains: next -> prev -> back -> x
     // warp.push(port(addr(next), 2));
     PUSH1, "02",
@@ -679,17 +708,23 @@ var reduce_ = [
     port,
     PUSH2, WARP_BUFFER_INIT,
     push,
- // 402 + X
+ // 408 + X
     // next = enter(port(addr(next), 1));
     PUSH1, "01",
     SWAP1,
     addr,
     port,
     enter,
+ // 443 + X
     // Stack contains: next_new -> prev -> back -> x
- //437+X
+    // Jump to loop begin
+    PUSH2, "IndexOfWhileLoopBegin_if2_while",
+    PC, // 447 + X
+    SUB,
+    JUMP,
+ //449+X
     // else {
-    JUMPDEST, // <---- IndexOfNotTakenBranch_if2_while, PC = 438+X
+    JUMPDEST, // <---- IndexOfNotTakenBranch_if2_while, PC = 450+X
     // Stack contains: next -> prev -> back -> x
     //  exit.push(slot(next));
     DUP1,
@@ -703,13 +738,15 @@ var reduce_ = [
     addr,
     port,
     enter,
- //546+X
-    PUSH2, "IndexOfWhileLoopStart",
-    PC,//550+X
+//546+X
+
+ //555+X
+    PUSH2, "IndexOfWhileLoopBegin_else_while",
+    PC,//558+X
     SUB,
     JUMP,
 
-    JUMPDEST, // <---- IndexOfFunctionEnd, PC = 553+X
+    JUMPDEST, // <---- IndexOfFunctionEnd, PC = 561+X
     POP,
     POP,
     POP,
@@ -720,21 +757,27 @@ var jumpToFunctionEnd = reduce_.indexOf("IndexOfFunctionEnd"); //
 var jumpToNotTakenBranchNext = reduce_.indexOf("IndexOfNotTakenBranch_next"); //
 var jumpToNotTakenBranchIf1While = reduce_.indexOf("IndexOfNotTakenBranch_if1_while"); //
 var jumpToNotTakenBranchIf2While = reduce_.indexOf("IndexOfNotTakenBranch_if2_while"); //
-var jumpToWhileLoopStart = reduce_.indexOf("IndexOfWhileLoopStart"); //
+var jumpToWhileLoopBeginElseWhile = reduce_.indexOf("IndexOfWhileLoopBegin_else_while"); //
+var jumpToWhileLoopBeginIf1While = reduce_.indexOf("IndexOfWhileLoopBegin_if1_while");
+var jumpToWhileLoopBeginIf2While = reduce_.indexOf("IndexOfWhileLoopBegin_if2_while");
 
 // TODO find a better way of doing this whithout hardcoding values
 // TODO find the correct values for these variables
-var IndexOfFunctionEnd = "07FC"; // "07D4";
+var IndexOfFunctionEnd = "081A";//"080E"//"07FC"; // "07D4";
 var IndexOfNotTakenBranch_next = "003D";//"0033";
-var IndexOfNotTakenBranch_if1_while = "0684"//"067A";
-var IndexOfNotTakenBranch_if2_while = "0076";//"006C";
-var IndexOfWhileLoopStart = "080a";//"07E2";
+var IndexOfNotTakenBranch_if1_while = "0693";//"068D";//"0684";//"067A";
+var IndexOfNotTakenBranch_if2_while = "007C";//"006C";
+var IndexOfWhileLoopBeginElseWhile = "0828";//"081C";//"080A";//"07E2";
+var IndexOfWhileLoopBeginIf1While = "072B";
+var IndexOfWhileLoopBeginIf2While = "07B5";
 
 reduce_[jumpToFunctionEnd] = IndexOfFunctionEnd;
 reduce_[jumpToNotTakenBranchNext] = IndexOfNotTakenBranch_next;
 reduce_[jumpToNotTakenBranchIf1While] = IndexOfNotTakenBranch_if1_while;
 reduce_[jumpToNotTakenBranchIf2While] = IndexOfNotTakenBranch_if2_while;
-reduce_[jumpToWhileLoopStart] = IndexOfWhileLoopStart;
+reduce_[jumpToWhileLoopBeginElseWhile] = IndexOfWhileLoopBeginElseWhile;
+reduce_[jumpToWhileLoopBeginIf1While] = IndexOfWhileLoopBeginIf1While;
+reduce_[jumpToWhileLoopBeginIf2While] = IndexOfWhileLoopBeginIf2While;
 
 const reduce = reduce_.join("");
 
@@ -788,6 +831,8 @@ module.exports = {
     SLOT_SIZE:SLOT_SIZE,
     NODE_SIZE:NODE_SIZE,
     FIRST_NODE_POS:FIRST_NODE_POS,
+    LOOP_COUNT:LOOP_COUNT,
+    REWRITE_COUNT:REWRITE_COUNT,
 
     //Functions
     node:node,
@@ -802,6 +847,7 @@ module.exports = {
     kind:kind,
     new_node:new_node,
     link:link,
+    inc:inc,
     rewrite:rewrite,
     push:push,
     pop:pop,
