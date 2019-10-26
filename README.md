@@ -1,8 +1,8 @@
-# Nasic-to-EVM
+# Formality-EVM
 
-Evaluates a Nasic graph inside the Ethereum Virtual Machine.
+Evaluates an FM-Net graph inside the Ethereum Virtual Machine.
 
-**ATENTION:** The Nasic -> EVM interpreter is still under heavy testing and development phase.
+**ATENTION:** The FM-Net -> EVM interpreter is still under heavy testing and development phase.
 
 ## How to run the code in your environment (testing only)
 
